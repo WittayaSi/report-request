@@ -3,8 +3,31 @@
 import { auth } from "@/auth";
 import { db } from "@/db/app.db";
 import { localUsers } from "@/db/app.schema";
-import { eq } from "drizzle-orm";
+import { eq, desc } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
+
+export async function getAllUsers() {
+  const session = await auth();
+  if (session?.user?.role !== "ADMIN") {
+    return [];
+  }
+
+  const users = await db
+    .select({
+      id: localUsers.id,
+      externalUsername: localUsers.externalUsername,
+      name: localUsers.name,
+      department: localUsers.department,
+      role: localUsers.role,
+      email: localUsers.email,
+      telegramChatId: localUsers.telegramChatId,
+      createdAt: localUsers.createdAt,
+    })
+    .from(localUsers)
+    .orderBy(desc(localUsers.createdAt));
+
+  return users;
+}
 
 export async function updateUserRoleAction(
   userId: number,

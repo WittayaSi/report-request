@@ -37,6 +37,7 @@ import { AttachmentList } from "@/components/attachment-list";
 import { AssignmentSelect } from "@/components/assignment-select";
 import { RequestTimeline } from "@/components/request-timeline";
 import { getRequestTimeline } from "@/app/actions/timeline.action";
+import { DuplicateButton } from "@/components/duplicate-button";
 
 interface RequestDetailPageProps {
   params: Promise<{ id: string }>;
@@ -192,6 +193,18 @@ export default async function RequestDetailPage({
                   </Badge>
                 </div>
                 <CardTitle className="text-2xl">{data.title}</CardTitle>
+              </div>
+              {/* Action Buttons */}
+              <div className="flex items-center gap-2">
+                <DuplicateButton requestId={data.id} />
+                {canEdit && (
+                  <Link href={`/requests/${data.id}/edit`}>
+                    <Button variant="outline" size="sm">
+                      <Pencil className="h-4 w-4 mr-2" />
+                      แก้ไข
+                    </Button>
+                  </Link>
+                )}
               </div>
             </div>
 
