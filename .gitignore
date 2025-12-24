@@ -39,3 +39,38 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+
+#fileupload
+public/uploads
+uploads/
+
+# IDE / Editor
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS files
+Thumbs.db
+
+# Logs
+*.log
+logs/
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+
+# Database files (if using SQLite locally)
+*.db
+*.sqlite
+
+# Drizzle
+drizzle/meta/
+
+# Package manager lock files (if you only want one)
+# package-lock.json
+# yarn.lock

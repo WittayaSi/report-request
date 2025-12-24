@@ -1,0 +1,1 @@
+ALTER TABLE `report_requests` ADD `source_system` enum('hosxp','hosoffice','php','other') DEFAULT 'hosxp' NOT NULL;

@@ -1,0 +1,55 @@
+{
+  "version": "7",
+  "dialect": "mysql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "5",
+      "when": 1766474000948,
+      "tag": "0000_slow_shadow_king",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "5",
+      "when": 1766480860791,
+      "tag": "0001_flat_puck",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "5",
+      "when": 1766481581207,
+      "tag": "0002_complex_metal_master",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "5",
+      "when": 1766483091328,
+      "tag": "0003_magical_luminals",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "5",
+      "when": 1766484160902,
+      "tag": "0004_nice_nextwave",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "5",
+      "when": 1766485130200,
+      "tag": "0005_youthful_sauron",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "5",
+      "when": 1766545171419,
+      "tag": "0006_aspiring_human_fly",
+      "breakpoints": true
+    }
+  ]
+}

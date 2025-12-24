@@ -1,0 +1,31 @@
+version: "3.8"
+services:
+  # ฐานข้อมูลสำหรับข้อมูลหลักของแอป
+  app_db:
+    image: postgres:15
+    restart: always
+    environment:
+      POSTGRES_USER: user_app
+      POSTGRES_PASSWORD: password_app
+      POSTGRES_DB: reporting_db
+    ports:
+      - "5433:5432" # Port สำหรับ App DB
+    volumes:
+      - app_db_data:/var/lib/postgresql/data
+
+  # ฐานข้อมูลสำหรับ Authentication
+  auth_db:
+    image: postgres:15
+    restart: always
+    environment:
+      POSTGRES_USER: user_auth
+      POSTGRES_PASSWORD: password_auth
+      POSTGRES_DB: auth_db
+    ports:
+      - "5434:5432" # Port สำหรับ Auth DB (ใช้ Port อื่นเพื่อไม่ให้ชนกัน)
+    volumes:
+      - auth_db_data:/var/lib/postgresql/data
+
+volumes:
+  app_db_data:
+  auth_db_data:

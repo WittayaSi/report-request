@@ -1,0 +1,1 @@
+ALTER TABLE `report_requests` ADD `rejection_reason` text;
