@@ -1,0 +1,110 @@
+version: "3.8"
+
+services:
+  # ============================================
+  # 🚀 Next.js Application
+  # ============================================
+  # - Build จาก Dockerfile ในโฟลเดอร์ปัจจุบัน
+  # - เปิด port 3000 สำหรับเข้าถึงเว็บ
+  # - เก็บไฟล์ upload ไว้บน host machine
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: report-request-app
+    restart: always
+    ports:
+      - "3001:3000"
+    environment:
+      - NODE_ENV=production
+      # ⚠️ เปลี่ยน DATABASE_URL ให้ตรงกับ app_db
+      - DATABASE_URL=mysql://user:password@app_db:3306/reporting_db
+      # External Database (HOSxP) - สำหรับ verify user
+      - EXTERNAL_DB_HOST=your-hosxp-db-host
+      - EXTERNAL_DB_PORT=3306
+      - EXTERNAL_DB_USER=hosxp_user
+      - EXTERNAL_DB_PASSWORD=hosxp_password
+      - EXTERNAL_DB_NAME=hosxp
+      # ⚠️ สร้างด้วย: openssl rand -base64 32
+      - AUTH_SECRET=change-this-with-openssl-rand
+      - NEXTAUTH_URL=https://your-domain.com
+      # Email SMTP
+      - SMTP_HOST=smtp.example.com
+      - SMTP_PORT=587
+      - SMTP_USER=noreply@example.com
+      - SMTP_PASSWORD=smtp_password
+      - SMTP_FROM=noreply@example.com
+      # ⚠️ เปลี่ยน default admin credentials
+      - ADMIN_USERNAME=appadmin
+      - ADMIN_PASSWORD=Admin@11241
+    volumes:
+      # 📁 Bind Mount: เก็บไฟล์ upload บน host
+      # Host: ./data/uploads → Container: /app/public/uploads
+      - ./data/uploads:/app/public/uploads
+    depends_on:
+      - app_db
+    networks:
+      - app_network
+
+  # ============================================
+  # 🗄️ MySQL Database
+  # ============================================
+  # - ใช้ MySQL 8.0 official image
+  # - เก็บข้อมูลบน host machine (ไม่หายเมื่อ restart/drop)
+  # - เปิด port 3307 (หลีกเลี่ยงชนกับ MySQL บน host)
+  app_db:
+    image: mysql:8.0
+    container_name: report-request-db
+    restart: always
+    environment:
+      # ⚠️ เปลี่ยน password ก่อน deploy จริง!
+      MYSQL_ROOT_PASSWORD: root_password_change_me
+      MYSQL_USER: user
+      MYSQL_PASSWORD: password
+      MYSQL_DATABASE: reporting_db
+    ports:
+      - "3307:3306"
+    volumes:
+      # 📁 Bind Mount: เก็บข้อมูล DB บน host
+      # Host: ./data/mysql → Container: /var/lib/mysql
+      - ./data/mysql:/var/lib/mysql
+    command: --default-authentication-plugin=mysql_native_password --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
+    networks:
+      - app_network
+
+networks:
+  app_network:
+    driver: bridge
+
+# ============================================
+# 📝 อธิบาย
+# ============================================
+#
+# 1. services.app (Next.js Application)
+#    - build: สร้าง image จาก Dockerfile
+#    - restart: always = รีสตาร์ทอัตโนมัติเมื่อ crash
+#    - ports: เปิด 3001 ให้เข้าจากข้างนอก
+#    - volumes: เก็บไฟล์ upload ไว้บน host (./data/uploads)
+#
+# 2. services.app_db (MySQL Database)
+#    - image: mysql:8.0 = ใช้ official MySQL image
+#    - volumes: เก็บข้อมูล DB ไว้บน host (./data/mysql)
+#    - command: ตั้งค่า charset เป็น utf8mb4 รองรับภาษาไทย
+#
+# 3. Data Persistence (ข้อมูลไม่หาย!)
+#    - ใช้ Bind Mount แทน Named Volume
+#    - ข้อมูลถูกเก็บในโฟลเดอร์ ./data/ บน host
+#    - เมื่อ docker-compose down หรือ restart ข้อมูลยังอยู่
+#
+# 4. การใช้งาน:
+#    # สร้างโฟลเดอร์ก่อน
+#    mkdir -p ./data/uploads ./data/mysql
+#
+#    # รัน
+#    docker compose -f docker-compose.prod.yml up -d --build
+#
+#    # หยุด (ข้อมูลไม่หาย)
+#    docker compose -f docker-compose.prod.yml down
+#
+#    # หยุดและลบ volume (⚠️ ข้อมูลหาย!)
+#    docker compose -f docker-compose.prod.yml down -v

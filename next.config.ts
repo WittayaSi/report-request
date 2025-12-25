@@ -24,6 +24,7 @@ const securityHeaders = [
 ];
 
 const nextConfig: NextConfig = {
+  output: 'standalone',
   // Allow larger file uploads for Server Actions (default is 1MB)
   experimental: {
     serverActions: {

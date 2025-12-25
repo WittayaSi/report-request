@@ -76,7 +76,7 @@ const priorityConfig: Record<string, { label: string; className: string }> = {
 const sourceSystemLabels: Record<string, string> = {
   hosxp: "HOSxP",
   hosoffice: "HosOffice",
-  php: "PHP (ระบบอื่น)",
+  php: "PHP",
   other: "อื่นๆ",
 };
 

@@ -1,0 +1,20 @@
+# Ignore everything
+*
+
+# Except these files
+!Dockerfile
+!docker-compose*.yml
+!package.json
+!pnpm-lock.yaml
+!next.config.ts
+!postcss.config.mjs
+!tailwind.config.ts
+!tsconfig.json
+!drizzle.app.config.ts
+!src
+!public
+!.next
+
+# But ignore these in src/public
+public/uploads/*
+!public/uploads/.gitkeep

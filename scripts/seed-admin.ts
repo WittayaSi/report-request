@@ -26,8 +26,9 @@ async function seedAdminUser() {
 
   const db = drizzle(pool, { mode: "default" });
 
-  const adminUsername = "appadmin";
-  const adminPassword = "Admin@11241";
+  // ใช้ค่าจาก environment variables
+  const adminUsername = process.env.ADMIN_USERNAME || "appadmin";
+  const adminPassword = process.env.ADMIN_PASSWORD || "Admin@11241";
 
   // Hash password ด้วย MD5 (เหมือนกับระบบ HR)
   const passwordHash = crypto.createHash("md5").update(adminPassword).digest("hex");
