@@ -16,9 +16,10 @@ import { Label } from "@/components/ui/label";
 
 interface SearchFiltersProps {
   departments: string[];
+  admins: { id: number; name: string }[];
 }
 
-export function SearchFilters({ departments }: SearchFiltersProps) {
+export function SearchFilters({ departments, admins }: SearchFiltersProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [isPending, startTransition] = useTransition();
@@ -26,6 +27,7 @@ export function SearchFilters({ departments }: SearchFiltersProps) {
   const [query, setQuery] = useState(searchParams.get("q") || "");
   const [status, setStatus] = useState(searchParams.get("status") || "all");
   const [department, setDepartment] = useState(searchParams.get("dept") || "all");
+  const [assignedTo, setAssignedTo] = useState(searchParams.get("assigned") || "all");
   const [startDate, setStartDate] = useState(searchParams.get("start") || "");
   const [endDate, setEndDate] = useState(searchParams.get("end") || "");
 
@@ -35,6 +37,7 @@ export function SearchFilters({ departments }: SearchFiltersProps) {
       if (query) params.set("q", query);
       if (status && status !== "all") params.set("status", status);
       if (department && department !== "all") params.set("dept", department);
+      if (assignedTo && assignedTo !== "all") params.set("assigned", assignedTo);
       if (startDate) params.set("start", startDate);
       if (endDate) params.set("end", endDate);
 
@@ -46,6 +49,7 @@ export function SearchFilters({ departments }: SearchFiltersProps) {
     setQuery("");
     setStatus("all");
     setDepartment("all");
+    setAssignedTo("all");
     setStartDate("");
     setEndDate("");
     startTransition(() => {
@@ -53,7 +57,7 @@ export function SearchFilters({ departments }: SearchFiltersProps) {
     });
   };
 
-  const hasFilters = query || status !== "all" || department !== "all" || startDate || endDate;
+  const hasFilters = query || status !== "all" || department !== "all" || assignedTo !== "all" || startDate || endDate;
 
   return (
     <div className="rounded-lg border bg-card p-4 space-y-4">
@@ -62,9 +66,9 @@ export function SearchFilters({ departments }: SearchFiltersProps) {
         ค้นหาและกรอง
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5">
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 items-end">
         {/* Search Query */}
-        <div className="space-y-1.5">
+        <div className="space-y-1.5 lg:col-span-2">
           <Label htmlFor="search-query">ค้นหา</Label>
           <div className="relative">
             <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
@@ -115,6 +119,24 @@ export function SearchFilters({ departments }: SearchFiltersProps) {
           </Select>
         </div>
 
+        {/* Assigned To */}
+        <div className="space-y-1.5">
+          <Label>มอบหมายให้</Label>
+          <Select value={assignedTo} onValueChange={setAssignedTo}>
+            <SelectTrigger>
+              <SelectValue placeholder="เลือกผู้รับผิดชอบ" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">ทั้งหมด</SelectItem>
+              {admins.map((admin) => (
+                <SelectItem key={admin.id} value={admin.id.toString()}>
+                  {admin.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+
         {/* Start Date */}
         <div className="space-y-1.5">
           <Label htmlFor="start-date">ตั้งแต่วันที่</Label>
@@ -136,20 +158,19 @@ export function SearchFilters({ departments }: SearchFiltersProps) {
             onChange={(e) => setEndDate(e.target.value)}
           />
         </div>
-      </div>
 
-      {/* Actions */}
-      <div className="flex items-center gap-2">
-        <Button onClick={handleSearch} disabled={isPending}>
-          <Search className="h-4 w-4 mr-2" />
-          ค้นหา
-        </Button>
-        {hasFilters && (
-          <Button variant="outline" onClick={handleClear} disabled={isPending}>
-            <X className="h-4 w-4 mr-2" />
-            ล้างตัวกรอง
+        {/* Actions */}
+        <div className="flex items-center gap-2">
+          <Button onClick={handleSearch} disabled={isPending} className="flex-1">
+            <Search className="h-4 w-4 mr-2" />
+            ค้นหา
           </Button>
-        )}
+          {hasFilters && (
+            <Button variant="outline" onClick={handleClear} disabled={isPending} size="icon" title="ล้างตัวกรอง">
+              <X className="h-4 w-4" />
+            </Button>
+          )}
+        </div>
       </div>
     </div>
   );

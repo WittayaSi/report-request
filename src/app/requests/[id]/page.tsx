@@ -38,6 +38,8 @@ import { AssignmentSelect } from "@/components/assignment-select";
 import { RequestTimeline } from "@/components/request-timeline";
 import { getRequestTimeline } from "@/app/actions/timeline.action";
 import { DuplicateButton } from "@/components/duplicate-button";
+import { PrintButton } from "@/components/print-button";
+import { DeleteButton } from "@/components/delete-button";
 
 interface RequestDetailPageProps {
   params: Promise<{ id: string }>;
@@ -195,7 +197,8 @@ export default async function RequestDetailPage({
                 <CardTitle className="text-2xl">{data.title}</CardTitle>
               </div>
               {/* Action Buttons */}
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 print:hidden">
+                <PrintButton title={data.title} />
                 <DuplicateButton requestId={data.id} />
                 {canEdit && (
                   <Link href={`/requests/${data.id}/edit`}>
@@ -204,6 +207,10 @@ export default async function RequestDetailPage({
                       แก้ไข
                     </Button>
                   </Link>
+                )}
+                {/* Delete button - only for owner when status is pending */}
+                {isOwner && data.status === "pending" && (
+                  <DeleteButton requestId={data.id} requestTitle={data.title} />
                 )}
               </div>
             </div>

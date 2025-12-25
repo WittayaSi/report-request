@@ -116,7 +116,42 @@
   * {
     @apply border-border outline-ring/50;
   }
+
   body {
     @apply bg-background text-foreground;
+  }
+}
+
+/* Print Styles */
+@media print {
+
+  /* Hide navigation, buttons, and interactive elements */
+  nav,
+  .navbar,
+  button,
+  [class*="print:hidden"] {
+    display: none !important;
+  }
+
+  /* Clean background for printing */
+  body {
+    background: white !important;
+    color: black !important;
+  }
+
+  /* Remove shadows and decorations */
+  * {
+    box-shadow: none !important;
+  }
+
+  /* Ensure content fits on page */
+  .container {
+    max-width: 100% !important;
+    padding: 0 !important;
+  }
+
+  /* Show full content */
+  main {
+    padding: 0 !important;
   }
 }

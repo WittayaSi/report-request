@@ -4,7 +4,7 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Download, Loader2 } from "lucide-react";
 import { exportRequestsToExcel, SearchFilters } from "@/app/actions/search.action";
-import * as XLSX from "xlsx";
+import ExcelJS from "exceljs";
 
 interface ExportButtonProps {
   filters: SearchFilters;
@@ -28,31 +28,56 @@ export function ExportButton({ filters }: ExportButtonProps) {
         return;
       }
 
-      // Create workbook
-      const worksheet = XLSX.utils.json_to_sheet(result.data);
-      const workbook = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(workbook, worksheet, "Requests");
+      // Create workbook with ExcelJS
+      const workbook = new ExcelJS.Workbook();
+      workbook.creator = "Report Request System";
+      workbook.created = new Date();
 
-      // Set column widths
-      worksheet["!cols"] = [
-        { wch: 8 },   // ID
-        { wch: 40 },  // หัวข้อ
-        { wch: 50 },  // รายละเอียด
-        { wch: 15 },  // สถานะ
-        { wch: 12 },  // ความเร่งด่วน
-        { wch: 15 },  // ประเภท
-        { wch: 20 },  // ผู้ขอ
-        { wch: 25 },  // แผนก
-        { wch: 12 },  // วันที่สร้าง
-        { wch: 12 },  // กำหนดส่ง
+      const worksheet = workbook.addWorksheet("Requests");
+
+      // Define columns
+      worksheet.columns = [
+        { header: "ID", key: "id", width: 8 },
+        { header: "หัวข้อ", key: "หัวข้อ", width: 40 },
+        { header: "รายละเอียด", key: "รายละเอียด", width: 50 },
+        { header: "สถานะ", key: "สถานะ", width: 15 },
+        { header: "ความเร่งด่วน", key: "ความเร่งด่วน", width: 12 },
+        { header: "ประเภทผลลัพธ์", key: "ประเภทผลลัพธ์", width: 15 },
+        { header: "ผู้ขอ", key: "ผู้ขอ", width: 20 },
+        { header: "แผนก", key: "แผนก", width: 25 },
+        { header: "วันที่สร้าง", key: "วันที่สร้าง", width: 15 },
+        { header: "กำหนดส่ง", key: "กำหนดส่ง", width: 15 },
       ];
+
+      // Style header row
+      worksheet.getRow(1).font = { bold: true };
+      worksheet.getRow(1).fill = {
+        type: "pattern",
+        pattern: "solid",
+        fgColor: { argb: "FF4472C4" },
+      };
+      worksheet.getRow(1).font = { bold: true, color: { argb: "FFFFFFFF" } };
+
+      // Add data rows
+      result.data.forEach((row) => {
+        worksheet.addRow(row);
+      });
 
       // Generate filename with current date
       const date = new Date().toISOString().split("T")[0];
       const filename = `report-requests-${date}.xlsx`;
 
       // Download file
-      XLSX.writeFile(workbook, filename);
+      const buffer = await workbook.xlsx.writeBuffer();
+      const blob = new Blob([buffer], {
+        type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = filename;
+      link.click();
+      URL.revokeObjectURL(url);
     } catch (error) {
       console.error("Export error:", error);
       alert("เกิดข้อผิดพลาดในการ Export");

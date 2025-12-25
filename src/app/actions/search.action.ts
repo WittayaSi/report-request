@@ -5,12 +5,15 @@ import { reportRequests, localUsers } from "@/db/app.schema";
 import { auth } from "@/auth";
 import { eq, and, like, gte, lte, desc, sql } from "drizzle-orm";
 
+import { alias } from "drizzle-orm/mysql-core";
+
 export interface SearchFilters {
   query?: string;
   status?: string;
   department?: string;
   startDate?: string;
   endDate?: string;
+  assignedTo?: string;
 }
 
 export async function searchRequests(filters: SearchFilters) {
@@ -33,6 +36,10 @@ export async function searchRequests(filters: SearchFilters) {
     conditions.push(eq(localUsers.department, filters.department));
   }
 
+  if (filters.assignedTo && filters.assignedTo !== "all") {
+    conditions.push(eq(reportRequests.assignedTo, parseInt(filters.assignedTo)));
+  }
+
   if (filters.startDate) {
     conditions.push(gte(reportRequests.createdAt, new Date(filters.startDate)));
   }
@@ -42,6 +49,9 @@ export async function searchRequests(filters: SearchFilters) {
     endOfDay.setHours(23, 59, 59, 999);
     conditions.push(lte(reportRequests.createdAt, endOfDay));
   }
+
+  // Alias for assignee join
+  const assignee = alias(localUsers, "assignee");
 
   const data = await db
     .select({
@@ -55,9 +65,11 @@ export async function searchRequests(filters: SearchFilters) {
       expectedDeadline: reportRequests.expectedDeadline,
       userName: localUsers.name,
       userDepartment: localUsers.department,
+      assigneeName: assignee.name,
     })
     .from(reportRequests)
     .leftJoin(localUsers, eq(reportRequests.requestedBy, localUsers.id))
+    .leftJoin(assignee, eq(reportRequests.assignedTo, assignee.id))
     .where(conditions.length > 0 ? and(...conditions) : undefined)
     .orderBy(desc(reportRequests.createdAt))
     .limit(100);

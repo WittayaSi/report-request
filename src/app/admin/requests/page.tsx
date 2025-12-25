@@ -1,7 +1,8 @@
 import { auth } from "@/auth";
 import { db } from "@/db/app.db";
 import { reportRequests, localUsers, comments, requestViews } from "@/db/app.schema";
-import { desc, eq, sql, and } from "drizzle-orm";
+import { desc, eq, sql, and, like } from "drizzle-orm";
+import { alias } from "drizzle-orm/mysql-core";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { Navbar } from "@/components/navbar";
@@ -21,12 +22,14 @@ import { AutoRefresh } from "@/components/auto-refresh";
 import { SearchFilters } from "./_components/search-filters";
 import { ExportButton } from "./_components/export-button";
 import { searchRequests, getDepartmentList, SearchFilters as SearchFiltersType } from "@/app/actions/search.action";
+import { getAdminUsers } from "@/app/actions/assignment.action";
 
 interface AdminRequestsPageProps {
   searchParams: Promise<{ 
     status?: string;
     q?: string;
     dept?: string;
+    assigned?: string;
     start?: string;
     end?: string;
   }>;
@@ -51,14 +54,20 @@ export default async function AdminRequestsPage({
     query: params.q,
     status: params.status,
     department: params.dept,
+    assignedTo: params.assigned,
     startDate: params.start,
     endDate: params.end,
   };
   
-  const hasAdvancedFilters = params.q || params.dept || params.start || params.end;
-  
   // Get department list for dropdown
   const departments = await getDepartmentList();
+  
+  // Get admin users for dropdown
+  const rawAdmins = await getAdminUsers();
+  const admins = rawAdmins.map(admin => ({
+    id: admin.id,
+    name: admin.name || admin.username
+  }));
 
   // Get all requests with user info
   const currentUserId = Number(session.user.id);
@@ -67,7 +76,10 @@ export default async function AdminRequestsPage({
   const filterConditions = [];
   
   if (filters.query) {
-    filterConditions.push(sql`${reportRequests.title} LIKE ${'%' + filters.query + '%'}`);
+    // Escape special SQL LIKE characters to prevent injection
+    const escapedQuery = filters.query.replace(/[%_\\]/g, '\\$&');
+    const searchTerm = `%${escapedQuery}%`;
+    filterConditions.push(like(reportRequests.title, searchTerm));
   }
   
   if (filters.status && filters.status !== "all") {
@@ -76,6 +88,10 @@ export default async function AdminRequestsPage({
   
   if (filters.department && filters.department !== "all") {
     filterConditions.push(eq(localUsers.department, filters.department));
+  }
+
+  if (filters.assignedTo && filters.assignedTo !== "all") {
+    filterConditions.push(eq(reportRequests.assignedTo, parseInt(filters.assignedTo)));
   }
   
   if (filters.startDate) {
@@ -88,6 +104,9 @@ export default async function AdminRequestsPage({
     filterConditions.push(sql`${reportRequests.createdAt} <= ${endOfDay}`);
   }
   
+  // Alias for assignee join
+  const assignee = alias(localUsers, "assignee");
+
   const requests = await db
     .select({
       id: reportRequests.id,
@@ -97,6 +116,7 @@ export default async function AdminRequestsPage({
       createdAt: reportRequests.createdAt,
       userName: localUsers.name,
       userDepartment: localUsers.department,
+      assigneeName: assignee.name,
       hasUnreadComments: sql<number>`(
         SELECT COUNT(*) FROM comments c
         WHERE c.request_id = ${reportRequests.id}
@@ -116,6 +136,7 @@ export default async function AdminRequestsPage({
     })
     .from(reportRequests)
     .leftJoin(localUsers, eq(reportRequests.requestedBy, localUsers.id))
+    .leftJoin(assignee, eq(reportRequests.assignedTo, assignee.id))
     .leftJoin(
       requestViews,
       and(
@@ -135,7 +156,7 @@ export default async function AdminRequestsPage({
       desc(reportRequests.createdAt)
     );
 
-  // Filter by status if specified
+  // Filter by status if specified (redundant with DB filter but kept for safety)
   const filteredRequests = statusFilter
     ? requests.filter((r) => r.status === statusFilter)
     : requests;
@@ -164,7 +185,7 @@ export default async function AdminRequestsPage({
 
         {/* Advanced Search Filters */}
         <div className="mb-6">
-          <SearchFilters departments={departments} />
+          <SearchFilters departments={departments} admins={admins} />
         </div>
 
         {/* Filter buttons and Export */}
@@ -244,6 +265,11 @@ export default async function AdminRequestsPage({
                       </div>
                       <p className="text-sm text-muted-foreground">
                         โดย: {request.userName} ({request.userDepartment})
+                        {request.assigneeName && (
+                          <span className="ml-2 text-primary">
+                            • ผู้รับผิดชอบ: {request.assigneeName}
+                          </span>
+                        )}
                       </p>
                       <p className="text-xs text-muted-foreground">
                         {formatThaiDateTime(request.createdAt)}
