@@ -1,6 +1,8 @@
 import type { NextAuthConfig } from "next-auth";
 
 export const authConfig = {
+  // Trust the host in production (required for Auth.js v5)
+  trustHost: true,
   pages: {
     signIn: "/login",
   },

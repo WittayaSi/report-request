@@ -1,5 +1,10 @@
 import type { NextConfig } from "next";
 
+/**
+ * Next.js Config สำหรับ Docker Build
+ * ใช้ output: 'standalone' เพื่อสร้าง minimal production build
+ */
+
 const securityHeaders = [
   {
     key: 'X-Content-Type-Options',
@@ -24,21 +29,18 @@ const securityHeaders = [
 ];
 
 const nextConfig: NextConfig = {
-  // output: 'standalone', // เปิดเฉพาะตอน build for Docker
-  // Allow larger file uploads for Server Actions (default is 1MB)
+  output: 'standalone', // Required for Docker
   experimental: {
     serverActions: {
       bodySizeLimit: "10mb",
     },
   },
   webpack: (config) => {
-    // บอก Webpack ไม่ต้องสนใจ pg-native
     config.externals.push({
       "pg-native": "pg-native",
     });
     return config;
   },
-  // Turbopack config for Next.js 16+
   turbopack: {
     resolveAlias: {
       "pg-native": "pg-native",
@@ -47,7 +49,6 @@ const nextConfig: NextConfig = {
   async headers() {
     return [
       {
-        // Apply headers to all routes
         source: '/:path*',
         headers: securityHeaders,
       },
@@ -56,4 +57,3 @@ const nextConfig: NextConfig = {
 };
 
 export default nextConfig;
-

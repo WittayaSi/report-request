@@ -15,6 +15,9 @@ RUN pnpm install --frozen-lockfile
 # Copy source code
 COPY . .
 
+# Use Docker-specific config (with output: 'standalone')
+RUN cp next.config.docker.ts next.config.ts
+
 # Build the application
 RUN pnpm build
 

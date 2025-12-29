@@ -119,6 +119,14 @@ export function LoginForm() {
                 "เข้าสู่ระบบ"
               )}
             </Button>
+
+            {/* Info message */}
+            <div className="text-center pt-4 border-t mt-4">
+              <p className="text-sm text-muted-foreground">
+                ใช้ Username และ Password เดียวกับ{" "}
+                <span className="font-semibold text-primary">HosOffice</span>
+              </p>
+            </div>
           </form>
         </CardContent>
       </Card>
