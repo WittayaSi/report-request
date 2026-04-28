@@ -27,6 +27,7 @@ import {
 import { redirect } from "next/navigation";
 import { getRequests } from "@/app/actions/dashboard.action";
 import { Badge } from "@/components/ui/badge";
+import { AutoRefresh } from "@/components/auto-refresh";
 import {
   getDashboardStats,
   getRequestsByDepartment,
@@ -111,6 +112,7 @@ export default async function DashboardPage() {
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
+      <AutoRefresh interval={30000} showToast={session.user.role === "ADMIN"} />
       <Navbar />
 
       <main className="container mx-auto px-4 py-8">

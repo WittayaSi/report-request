@@ -184,7 +184,7 @@ export default async function AdminRequestsPage({
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
-      <AutoRefresh interval={30000} /> {/* Smart refresh: checks lightweight API, adapts interval */}
+      <AutoRefresh interval={30000} showToast /> {/* Smart refresh: checks lightweight API, adapts interval */}
       <Navbar />
 
       <main className="container mx-auto px-4 py-8">

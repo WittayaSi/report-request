@@ -7,6 +7,28 @@ export const authConfig = {
     signIn: "/login",
   },
   callbacks: {
+    // JWT callback - ต้องมีเพื่อให้ middleware อ่าน role จาก token ได้
+    jwt({ token, user }) {
+      if (user) {
+        token.id = user.id;
+        token.username = (user as any).username;
+        token.name = user.name || "";
+        token.role = (user as any).role;
+        token.department = (user as any).department;
+      }
+      return token;
+    },
+    // Session callback - ส่ง role จาก token ไปยัง session
+    session({ session, token }: any) {
+      if (session.user) {
+        session.user.id = token.id;
+        session.user.username = token.username;
+        session.user.name = token.name;
+        session.user.role = token.role;
+        session.user.department = token.department;
+      }
+      return session;
+    },
     authorized({ auth, request: { nextUrl } }) {
       const isLoggedIn = !!auth?.user;
       const pathname = nextUrl.pathname;

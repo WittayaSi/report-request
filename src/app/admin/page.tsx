@@ -22,6 +22,7 @@ import {
 } from "lucide-react";
 import { getSatisfactionStats } from "@/app/actions/satisfaction.action";
 import { SatisfactionStatsCard } from "@/components/satisfaction-stats-card";
+import { AutoRefresh } from "@/components/auto-refresh";
 
 export default async function AdminPage() {
   const session = await auth();
@@ -52,6 +53,7 @@ export default async function AdminPage() {
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
+      <AutoRefresh interval={30000} showToast />
       <Navbar />
 
       <main className="container mx-auto px-4 py-8">

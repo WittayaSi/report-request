@@ -48,6 +48,7 @@ import { SatisfactionDisplay } from "@/components/satisfaction-display";
 import { getSatisfactionByRequestId } from "@/app/actions/satisfaction.action";
 import { Star } from "lucide-react";
 import { SaveAsTemplateButton } from "@/components/save-as-template-button";
+import { AutoRefresh } from "@/components/auto-refresh";
 
 interface RequestDetailPageProps {
   params: Promise<{ id: string }>;
@@ -190,6 +191,7 @@ export default async function RequestDetailPage({
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
+      <AutoRefresh interval={15000} />
       <Navbar />
 
       <main className="container mx-auto px-4 py-8 max-w-3xl">
