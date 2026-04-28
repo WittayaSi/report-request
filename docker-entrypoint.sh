@@ -13,22 +13,22 @@ while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
         const mysql = require('mysql2/promise');
         (async () => {
             try {
-                const url = new URL(process.env.DATABASE_URL || '');
                 const connection = await mysql.createConnection({
-                    host: url.hostname,
-                    port: parseInt(url.port) || 3306,
-                    user: url.username,
-                    password: url.password,
-                    database: url.pathname.slice(1)
+                    host: process.env.MYSQL_APP_HOST || 'localhost',
+                    port: parseInt(process.env.MYSQL_APP_PORT) || 3306,
+                    user: process.env.MYSQL_APP_USER || 'root',
+                    password: process.env.MYSQL_APP_PASSWORD || '',
+                    database: process.env.MYSQL_APP_DATABASE || 'report_request_db'
                 });
                 await connection.ping();
                 await connection.end();
                 process.exit(0);
             } catch (e) {
+                console.error('Connection error:', e.message);
                 process.exit(1);
             }
         })();
-    " 2>/dev/null; then
+    "; then
         echo "✅ Database is ready!"
         break
     fi
@@ -45,7 +45,8 @@ fi
 
 # Run database migrations/push
 echo "📦 Running database migrations..."
-npx drizzle-kit push --config=drizzle.app.config.ts 2>/dev/null || echo "   Migration skipped or already up to date"
+npx drizzle-kit push --config=drizzle.app.config.ts || echo "   Migration warning (check logs)"
+# echo "   Skipping migration in Docker (run manually if needed)"
 
 # Seed admin user if not exists
 echo "👤 Checking admin user..."
@@ -55,13 +56,12 @@ const crypto = require('crypto');
 
 (async () => {
     try {
-        const url = new URL(process.env.DATABASE_URL || '');
         const connection = await mysql.createConnection({
-            host: url.hostname,
-            port: parseInt(url.port) || 3306,
-            user: url.username,
-            password: url.password,
-            database: url.pathname.slice(1)
+            host: process.env.MYSQL_APP_HOST || 'localhost',
+            port: parseInt(process.env.MYSQL_APP_PORT) || 3306,
+            user: process.env.MYSQL_APP_USER || 'root',
+            password: process.env.MYSQL_APP_PASSWORD || '',
+            database: process.env.MYSQL_APP_DATABASE || 'report_request_db'
         });
         
         // Check if admin exists

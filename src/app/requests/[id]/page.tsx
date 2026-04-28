@@ -2,10 +2,12 @@ import { auth } from "@/auth";
 import { db } from "@/db/app.db";
 import { reportRequests, localUsers, comments } from "@/db/app.schema";
 import { eq, desc } from "drizzle-orm";
+import { alias } from "drizzle-orm/mysql-core";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { Navbar } from "@/components/navbar";
 import { StatusBadge } from "@/components/status-badge";
+import { SlaBadge } from "@/components/sla-badge";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -26,6 +28,7 @@ import {
   Clock,
   Pencil,
   Paperclip,
+  UserCheck,
 } from "lucide-react";
 import { CancelRequestButton } from "./_components/cancel-button";
 import { CommentSection } from "./_components/comment-section";
@@ -40,6 +43,11 @@ import { getRequestTimeline } from "@/app/actions/timeline.action";
 import { DuplicateButton } from "@/components/duplicate-button";
 import { PrintButton } from "@/components/print-button";
 import { DeleteButton } from "@/components/delete-button";
+import { SatisfactionRatingForm } from "@/components/satisfaction-rating-form";
+import { SatisfactionDisplay } from "@/components/satisfaction-display";
+import { getSatisfactionByRequestId } from "@/app/actions/satisfaction.action";
+import { Star } from "lucide-react";
+import { SaveAsTemplateButton } from "@/components/save-as-template-button";
 
 interface RequestDetailPageProps {
   params: Promise<{ id: string }>;
@@ -94,7 +102,9 @@ export default async function RequestDetailPage({
     notFound();
   }
 
-  // Get request with user info
+  // Get request with user info + assignee name
+  const assignee = alias(localUsers, "assignee");
+
   const request = await db
     .select({
       id: reportRequests.id,
@@ -118,11 +128,15 @@ export default async function RequestDetailPage({
       updatedAt: reportRequests.updatedAt,
       requestedBy: reportRequests.requestedBy,
       assignedTo: reportRequests.assignedTo,
+      isDeleted: reportRequests.isDeleted,
+      slaDeadline: reportRequests.slaDeadline,
       userName: localUsers.name,
       userDepartment: localUsers.department,
+      assigneeName: assignee.name,
     })
     .from(reportRequests)
     .leftJoin(localUsers, eq(reportRequests.requestedBy, localUsers.id))
+    .leftJoin(assignee, eq(reportRequests.assignedTo, assignee.id))
     .where(eq(reportRequests.id, requestId))
     .limit(1);
 
@@ -155,14 +169,20 @@ export default async function RequestDetailPage({
   // Get timeline events
   const timelineEvents = await getRequestTimeline(requestId);
 
+  // Get satisfaction rating
+  const existingSatisfaction = await getSatisfactionByRequestId(requestId);
+
   // Mark as viewed (Client Component)
   // await markRequestAsViewed(requestId);
 
   const data = request[0];
   const userId = parseInt(session.user.id, 10);
   const isOwner = data.requestedBy === userId;
-  const canCancel = isOwner && data.status === "pending";
-  const canEdit = isOwner && data.status === "pending";
+  const isRated = !!existingSatisfaction;
+  const isClosed = data.status === "cancelled" || data.status === "rejected";
+  const isLocked = isRated || isClosed; // ล็อคเมื่อประเมินแล้ว หรือ ยกเลิก/ปฏิเสธ
+  const canCancel = isOwner && data.status === "pending" && !isLocked;
+  const canEdit = isOwner && data.status === "pending" && !isLocked;
 
   const isAdmin = session.user.role === "ADMIN";
   const backLink = isAdmin ? "/admin/requests" : "/requests";
@@ -181,38 +201,61 @@ export default async function RequestDetailPage({
           {backLabel}
         </Link>
 
+        {data.isDeleted && (
+          <div className="mb-6 bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative" role="alert">
+            <strong className="font-bold">คำขอนี้ถูกลบไปแล้ว! </strong>
+            <span className="block sm:inline">ข้อมูลนี้เป็นเพียงแค่สำหรับใช้อ้างอิง (Soft Deleted)</span>
+          </div>
+        )}
+
         <Card>
-          <CardHeader>
-            <div className="flex items-start justify-between gap-4">
-              <div className="flex-1">
-                <div className="flex items-center gap-3 mb-2">
-                  <StatusBadge status={data.status} />
-                  <span className="text-sm text-muted-foreground">
-                    #{data.id}
-                  </span>
-                  <Badge className={priorityConfig[data.priority]?.className}>
-                    {priorityConfig[data.priority]?.label}
-                  </Badge>
-                </div>
-                <CardTitle className="text-2xl">{data.title}</CardTitle>
+          <CardHeader className="space-y-4">
+            {/* Title & Status Row */}
+            <div>
+              <div className="flex items-center gap-3 mb-3">
+                <StatusBadge status={data.status} />
+                <span className="text-sm text-muted-foreground">
+                  #{data.id}
+                </span>
+                <Badge className={priorityConfig[data.priority]?.className}>
+                  {priorityConfig[data.priority]?.label}
+                </Badge>
+                <SlaBadge slaDeadline={data.slaDeadline} status={data.status} />
               </div>
-              {/* Action Buttons */}
-              <div className="flex items-center gap-2 print:hidden">
-                <PrintButton title={data.title} />
-                <DuplicateButton requestId={data.id} />
-                {canEdit && (
-                  <Link href={`/requests/${data.id}/edit`}>
-                    <Button variant="outline" size="sm">
-                      <Pencil className="h-4 w-4 mr-2" />
-                      แก้ไข
-                    </Button>
-                  </Link>
-                )}
-                {/* Delete button - only for owner when status is pending */}
-                {isOwner && data.status === "pending" && (
+              <CardTitle className="text-2xl">{data.title}</CardTitle>
+            </div>
+
+            {/* Action Bar — แยกบรรทัด ดูสะอาดกว่า */}
+            <div className="flex flex-wrap items-center gap-2 pt-2 border-t print:hidden">
+              <PrintButton title={data.title} />
+              <DuplicateButton requestId={data.id} />
+              <SaveAsTemplateButton
+                requestData={{
+                  title: data.title,
+                  description: data.description,
+                  outputType: data.outputType,
+                  fileFormat: data.fileFormat,
+                  dateRangeType: data.dateRangeType,
+                  priority: data.priority,
+                  sourceSystem: data.sourceSystem,
+                  dataSource: data.dataSource,
+                  additionalNotes: data.additionalNotes,
+                }}
+              />
+              {canEdit && (
+                <Link href={`/requests/${data.id}/edit`}>
+                  <Button variant="outline" size="sm">
+                    <Pencil className="h-4 w-4 mr-2" />
+                    แก้ไข
+                  </Button>
+                </Link>
+              )}
+              {/* Delete — แยกไปขวาสุด */}
+              {isOwner && data.status === "pending" && !isLocked && (
+                <div className="ml-auto">
                   <DeleteButton requestId={data.id} requestTitle={data.title} />
-                )}
-              </div>
+                </div>
+              )}
             </div>
 
             {/* Rejection Reason Alert */}
@@ -244,19 +287,31 @@ export default async function RequestDetailPage({
                 <Clock className="h-4 w-4" />
                 <span>สร้างเมื่อ {formatThaiDateTime(data.createdAt)}</span>
               </div>
+              {data.assigneeName && (
+                <div className="flex items-center gap-2 text-blue-600 dark:text-blue-400 font-medium">
+                  <UserCheck className="h-4 w-4" />
+                  <span>ผู้รับผิดชอบ: {data.assigneeName}</span>
+                </div>
+              )}
             </div>
 
             {/* Admin: Assignment Section */}
             {isAdmin && (
               <div className="p-4 bg-blue-50 dark:bg-blue-950/30 rounded-lg border border-blue-200 dark:border-blue-800">
-                <div className="flex items-center justify-between">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                   <div>
-                    <h4 className="font-medium text-blue-700 dark:text-blue-300">ผู้รับผิดชอบ</h4>
-                    <p className="text-sm text-blue-600 dark:text-blue-400">มอบหมายงานให้ Admin</p>
+                    <h4 className="font-medium text-blue-700 dark:text-blue-300">
+                      {data.assigneeName ? `ผู้รับผิดชอบ: ${data.assigneeName}` : "ยังไม่ได้มอบหมาย"}
+                    </h4>
+                    <p className="text-sm text-blue-600 dark:text-blue-400">
+                      {data.assignedTo
+                        ? "เปลี่ยน หรือ มอบหมายงานให้ Admin คนอื่น"
+                        : "มอบหมายงานให้ Admin — หรือเปลี่ยนสถานะเป็น 'กำลังดำเนินการ' เพื่อรับงานอัตโนมัติ"}
+                    </p>
                   </div>
-                  <AssignmentSelect 
-                    requestId={data.id} 
-                    currentAssignee={data.assignedTo} 
+                  <AssignmentSelect
+                    requestId={data.id}
+                    currentAssignee={data.assignedTo}
                   />
                 </div>
               </div>
@@ -273,12 +328,14 @@ export default async function RequestDetailPage({
                 </h4>
                 <p className="font-medium">{outputTypeLabels[data.outputType]}</p>
               </div>
-              {data.fileFormat && (
+              {data.outputType === "file" && (
                 <div>
                   <h4 className="text-sm font-medium text-muted-foreground mb-1">
                     รูปแบบไฟล์
                   </h4>
-                  <p className="font-medium">{fileFormatLabels[data.fileFormat]}</p>
+                  <p className="font-medium">
+                    {data.fileFormat ? fileFormatLabels[data.fileFormat] : <span className="text-muted-foreground italic">ไม่ได้ระบุรูปแบบ</span>}
+                  </p>
                 </div>
               )}
             </div>
@@ -337,24 +394,32 @@ export default async function RequestDetailPage({
             <Separator />
 
             {/* Description */}
-            <div>
-              <h3 className="font-medium mb-2">รายละเอียด</h3>
-              {data.description ? (
-                <p className="text-muted-foreground whitespace-pre-wrap">
-                  {data.description}
-                </p>
+            <div className="bg-white dark:bg-gray-800 rounded-lg p-5 border shadow-sm">
+              <h3 className="font-semibold mb-3 flex items-center gap-2 text-primary border-b pb-2">
+                <FileText className="h-5 w-5" />
+                รายละเอียดการดำเนินงาน
+              </h3>
+              {data.description && data.description !== "<p></p>" ? (
+                <div 
+                  className="text-foreground/90 tiptap prose prose-sm dark:prose-invert max-w-none" 
+                  dangerouslySetInnerHTML={{ __html: data.description }} 
+                />
               ) : (
-                <p className="text-muted-foreground italic">ไม่มีรายละเอียด</p>
+                <p className="text-muted-foreground italic text-sm">ไม่มีรายละเอียดระบุไว้</p>
               )}
             </div>
 
             {/* Additional Notes */}
-            {data.additionalNotes && (
-              <div>
-                <h3 className="font-medium mb-2">หมายเหตุเพิ่มเติม</h3>
-                <p className="text-muted-foreground whitespace-pre-wrap">
-                  {data.additionalNotes}
-                </p>
+            {data.additionalNotes && data.additionalNotes !== "<p></p>" && (
+              <div className="bg-blue-50/50 dark:bg-blue-950/20 rounded-lg p-5 border border-blue-100 dark:border-blue-900 shadow-sm mt-4">
+                <h3 className="font-semibold mb-3 flex items-center gap-2 text-blue-700 dark:text-blue-300 border-b border-blue-200 dark:border-blue-800 pb-2">
+                  <AlertCircle className="h-5 w-5" />
+                  หมายเหตุเพิ่มเติม / ข้อควรระวัง
+                </h3>
+                <div 
+                  className="text-foreground/90 tiptap prose prose-sm dark:prose-invert max-w-none" 
+                  dangerouslySetInnerHTML={{ __html: data.additionalNotes }} 
+                />
               </div>
             )}
 
@@ -391,12 +456,14 @@ export default async function RequestDetailPage({
               attachments={requestAttachments}
               currentUserId={userId}
               isAdmin={isAdmin}
+              isRequestRated={!!existingSatisfaction}
+              isRequestCompleted={data.status === "completed"}
             />
             
             {/* Upload Section - Show based on status and role */}
             {(() => {
-              const userCanUpload = isOwner && (data.status === "pending" || data.status === "in_progress");
-              const adminCanUpload = isAdmin && data.status === "completed";
+              const userCanUpload = isOwner && (data.status === "pending" || data.status === "in_progress") && !isLocked;
+              const adminCanUpload = isAdmin && data.status === "completed" && !isLocked;
               
               if (userCanUpload || adminCanUpload) {
                 return (
@@ -420,7 +487,41 @@ export default async function RequestDetailPage({
           requestId={data.id}
           comments={formattedComments}
           currentUserId={userId}
+          isLocked={isLocked}
+          isAdmin={isAdmin}
+          lockReason={
+            isRated
+              ? "คำขอนี้ถูกปิดแล้ว (ประเมินความพึงพอใจเรียบร้อย)"
+              : data.status === "cancelled"
+              ? "คำขอนี้ถูกยกเลิกแล้ว"
+              : data.status === "rejected"
+              ? "คำขอนี้ถูกปฏิเสธแล้ว"
+              : undefined
+          }
         />
+
+        {/* Satisfaction Rating Section - Show for completed requests */}
+        {data.status === "completed" && (
+          <Card className="mt-6 border-yellow-200 dark:border-yellow-800">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Star className="h-5 w-5 text-yellow-500" />
+                ประเมินความพึงพอใจ
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {existingSatisfaction ? (
+                <SatisfactionDisplay satisfaction={existingSatisfaction} />
+              ) : isOwner ? (
+                <SatisfactionRatingForm requestId={data.id} />
+              ) : (
+                <p className="text-muted-foreground text-center py-4">
+                  ยังไม่มีการประเมินความพึงพอใจ
+                </p>
+              )}
+            </CardContent>
+          </Card>
+        )}
 
         {/* Timeline */}
         <Card className="mt-6">

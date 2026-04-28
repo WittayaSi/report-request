@@ -14,29 +14,50 @@ services:
     container_name: report-request-app
     restart: always
     ports:
-      - "3001:3000"
+      - "3002:3000"
     environment:
       - NODE_ENV=production
-      # ⚠️ เปลี่ยน DATABASE_URL ให้ตรงกับ app_db
-      - DATABASE_URL=mysql://user:password@app_db:3306/reporting_db
-      # External Database (HOSxP) - สำหรับ verify user
-      - EXTERNAL_DB_HOST=your-hosxp-db-host
-      - EXTERNAL_DB_PORT=3306
-      - EXTERNAL_DB_USER=hosxp_user
-      - EXTERNAL_DB_PASSWORD=hosxp_password
-      - EXTERNAL_DB_NAME=hosxp
-      # ⚠️ สร้างด้วย: openssl rand -base64 32
-      - AUTH_SECRET=change-this-with-openssl-rand
-      - NEXTAUTH_URL=https://your-domain.com
-      # Email SMTP
-      - SMTP_HOST=smtp.example.com
-      - SMTP_PORT=587
-      - SMTP_USER=noreply@example.com
-      - SMTP_PASSWORD=smtp_password
-      - SMTP_FROM=noreply@example.com
-      # ⚠️ เปลี่ยน default admin credentials
+
+      # ⚠️ AUTH SECRET (สร้างด้วย: openssl rand -base64 32)
+      - AUTH_SECRET=yyn7zrKwz1SNZVyoyzVH+lUZ4YJJsLTx2c6pahqeGMI=
+
+      # ⚠️ Admin Credentials
       - ADMIN_USERNAME=appadmin
       - ADMIN_PASSWORD=Admin@11241
+
+      # ===================
+      # External MySQL (Authentication - hr_person table)
+      # ===================
+      - MYSQL_AUTH_HOST=172.168.0.123
+      - MYSQL_AUTH_PORT=3306
+      - MYSQL_AUTH_USER=auth_readonly
+      - MYSQL_AUTH_PASSWORD=Pass@11241
+      - MYSQL_AUTH_DATABASE=hosoffice
+
+      # ===================
+      # App MySQL (Docker container - app_db)
+      # ===================
+      - MYSQL_APP_HOST=app_db
+      - MYSQL_APP_PORT=3306
+      - MYSQL_APP_USER=user
+      - MYSQL_APP_PASSWORD=password
+      - MYSQL_APP_DATABASE=reporting_db
+
+      # ===================
+      # Application
+      # ===================
+      - NEXT_PUBLIC_BASE_URL=http://localhost:3001
+
+      # ===================
+      # Email SMTP (Optional)
+      # ===================
+      - SMTP_HOST=smtp.example.com
+      - SMTP_PORT=587
+      - SMTP_SECURE=false
+      - SMTP_USER=noreply@example.com
+      - SMTP_PASS=smtp_password
+      - SMTP_FROM=noreply@example.com
+
     volumes:
       # 📁 Bind Mount: เก็บไฟล์ upload บน host
       # Host: ./data/uploads → Container: /app/public/uploads
@@ -68,7 +89,7 @@ services:
       # 📁 Bind Mount: เก็บข้อมูล DB บน host
       # Host: ./data/mysql → Container: /var/lib/mysql
       - ./data/mysql:/var/lib/mysql
-    command: --default-authentication-plugin=mysql_native_password --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
+      # command: --default-authentication-plugin=mysql_native_password --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
     networks:
       - app_network
 

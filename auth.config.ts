@@ -22,7 +22,7 @@ export const authConfig = {
       );
 
       // Protected routes - ต้อง login
-      const protectedRoutes = ["/dashboard", "/admin", "/profile", "/settings"];
+      const protectedRoutes = ["/dashboard", "/admin", "/profile", "/settings", "/requests"];
       const isProtectedRoute = protectedRoutes.some((route) =>
         pathname.startsWith(route)
       );

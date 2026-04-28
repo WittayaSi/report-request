@@ -1,0 +1,130 @@
+version: "3.8"
+
+services:
+  # ============================================
+  # 🌐 Nginx Load Balancer
+  # ============================================
+  nginx:
+    image: nginx:alpine
+    container_name: report-request-nginx
+    restart: always
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      - app
+    networks:
+      - app_network
+    healthcheck:
+      test: [ "CMD", "wget", "-qO-", "http://localhost/health" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # ============================================
+  # 🚀 Next.js Application (Scalable)
+  # ============================================
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: always
+    deploy:
+      replicas: 3
+      resources:
+        limits:
+          memory: 512M
+        reservations:
+          memory: 256M
+    environment:
+      - NODE_ENV=production
+      # ⚠️ เปลี่ยนค่าเหล่านี้ก่อน deploy
+      - MYSQL_APP_HOST=app_db
+      - MYSQL_APP_PORT=3306
+      - MYSQL_APP_USER=user
+      - MYSQL_APP_PASSWORD=password
+      - MYSQL_APP_DATABASE=reporting_db
+      # External Database (HOSxP)
+      - EXTERNAL_DB_HOST=your-hosxp-db-host
+      - EXTERNAL_DB_PORT=3306
+      - EXTERNAL_DB_USER=hosxp_user
+      - EXTERNAL_DB_PASSWORD=hosxp_password
+      - EXTERNAL_DB_NAME=hosxp
+      # ⚠️ สร้างด้วย: openssl rand -base64 32
+      - AUTH_SECRET=change-this-with-openssl-rand
+      - NEXTAUTH_URL=http://localhost
+      # Email SMTP
+      - SMTP_HOST=smtp.example.com
+      - SMTP_PORT=587
+      - SMTP_USER=noreply@example.com
+      - SMTP_PASSWORD=smtp_password
+      - SMTP_FROM=noreply@example.com
+      # Admin credentials
+      - ADMIN_USERNAME=appadmin
+      - ADMIN_PASSWORD=Admin@11241
+    volumes:
+      - uploads_data:/app/public/uploads
+    depends_on:
+      app_db:
+        condition: service_healthy
+    networks:
+      - app_network
+
+  # ============================================
+  # 🗄️ MySQL Database (Optimized for 400 users)
+  # ============================================
+  app_db:
+    image: mysql:8.0
+    container_name: report-request-db
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: root_password_change_me
+      MYSQL_USER: user
+      MYSQL_PASSWORD: password
+      MYSQL_DATABASE: reporting_db
+    ports:
+      - "3307:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./mysql/my.cnf:/etc/mysql/conf.d/custom.cnf:ro
+    command: >
+      --default-authentication-plugin=mysql_native_password --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci --max_connections=200 --innodb_buffer_pool_size=256M --innodb_log_file_size=64M
+    networks:
+      - app_network
+    healthcheck:
+      test: [ "CMD", "mysqladmin", "ping", "-h", "localhost" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+networks:
+  app_network:
+    driver: bridge
+
+volumes:
+  mysql_data:
+  uploads_data:
+
+    # ============================================
+    # 📝 การใช้งาน
+    # ============================================
+    #
+    # 1. สร้าง Nginx config:
+    #    mkdir -p nginx mysql
+    #
+    # 2. รัน (build และ scale 3 instances):
+    #    docker compose -f docker-compose.scale.yml up -d --build
+    #
+    # 3. ดู logs:
+    #    docker compose -f docker-compose.scale.yml logs -f
+    #
+    # 4. Scale เพิ่ม/ลด:
+    #    docker compose -f docker-compose.scale.yml up -d --scale app=5
+    #
+    # 5. หยุด:
+    #    docker compose -f docker-compose.scale.yml down
+    #
+    # 📊 Capacity Estimate:
+    #    - 3 replicas × 50 connections = รองรับ 300-500 concurrent users
+    #    - 5 replicas × 50 connections = รองรับ 500-800 concurrent users

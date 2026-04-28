@@ -67,7 +67,7 @@ export async function updateReportRequest(requestId: number, formData: FormData)
       title: data.title,
       description: data.description || null,
       outputType: data.outputType,
-      fileFormat: data.outputType === "file" ? data.fileFormat : null,
+      fileFormat: data.outputType === "file" ? (data.fileFormat || "excel") : null,
       dateRangeType: data.dateRangeType,
       startDate: data.startDate ? new Date(data.startDate) : null,
       endDate: data.endDate ? new Date(data.endDate) : null,

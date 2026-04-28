@@ -3,18 +3,57 @@
 
 # Except these files
 !Dockerfile
+!docker-entrypoint.sh
 !docker-compose*.yml
 !package.json
 !pnpm-lock.yaml
 !next.config.ts
+!next.config.docker.ts
 !postcss.config.mjs
 !tailwind.config.ts
 !tsconfig.json
 !drizzle.app.config.ts
+!drizzle
 !src
 !public
 !.next
+!nginx
+!mysql
+!auth.ts
+!auth.config.ts
+!middleware.ts
 
 # But ignore these in src/public
 public/uploads/*
 !public/uploads/.gitkeep
+
+# Ignore test files and coverage
+src/__tests__
+**/*.test.ts
+**/*.test.tsx
+**/*.spec.ts
+**/*.spec.tsx
+vitest.config.ts
+coverage/
+
+# Ignore data directories
+data/
+
+# Ignore env files except template
+.env*
+!.env.example
+
+# Ignore IDE and editor files
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Ignore git
+.git
+.gitignore
+
+# README and docs
+README.md
+DOCKER.md
+*.md

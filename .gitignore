@@ -74,3 +74,18 @@ drizzle/meta/
 # Package manager lock files (if you only want one)
 # package-lock.json
 # yarn.lock
+
+# Docker data directories
+/data/
+data/mysql/
+data/uploads/
+
+# Staging environment (contains credentials)
+.env.staging
+
+# Test coverage
+/coverage/
+*.lcov
+
+# Vitest
+.vitest/

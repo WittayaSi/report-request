@@ -48,6 +48,8 @@ interface AttachmentListProps {
   currentUserId: number;
   isAdmin: boolean;
   showUploader?: boolean;
+  isRequestRated?: boolean;
+  isRequestCompleted?: boolean;
 }
 
 function getFileIcon(fileType: string) {
@@ -74,6 +76,8 @@ export function AttachmentList({
   currentUserId,
   isAdmin,
   showUploader = true,
+  isRequestRated = true,
+  isRequestCompleted = false,
 }: AttachmentListProps) {
   const router = useRouter();
   const [deletingId, setDeletingId] = useState<number | null>(null);
@@ -112,6 +116,10 @@ export function AttachmentList({
         // Check if file can be previewed in browser
         const isPreviewable = attachment.fileType.startsWith("image/") || 
                               attachment.fileType === "application/pdf";
+        
+        // Block result file downloads if request is completed but not rated (unless admin)
+        const isResultFile = attachment.attachmentType === "result";
+        const downloadBlocked = isResultFile && isRequestCompleted && !isRequestRated && !isAdmin;
 
         return (
           <div
@@ -172,20 +180,39 @@ export function AttachmentList({
               )}
 
               {/* Download */}
-              <Button
-                variant="ghost"
-                size="icon"
-                asChild
-                title="ดาวน์โหลด"
-              >
-                <a
-                  href={`/uploads/${attachment.storedFilename}`}
-                  download={attachment.filename}
-                  target="_blank"
+              {downloadBlocked ? (
+                <div className="relative group">
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    disabled
+                    className="cursor-not-allowed opacity-50"
+                    title="กรุณาประเมินความพึงพอใจก่อนดาวน์โหลด"
+                  >
+                    <Download className="h-4 w-4" />
+                  </Button>
+                  <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 hidden group-hover:block z-50">
+                    <div className="bg-amber-600 text-white text-xs px-2 py-1 rounded whitespace-nowrap">
+                      กรุณาประเมินความพึงพอใจก่อน
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  asChild
+                  title="ดาวน์โหลด"
                 >
-                  <Download className="h-4 w-4" />
-                </a>
-              </Button>
+                  <a
+                    href={`/uploads/${attachment.storedFilename}`}
+                    download={attachment.filename}
+                    target="_blank"
+                  >
+                    <Download className="h-4 w-4" />
+                  </a>
+                </Button>
+              )}
 
               {/* Delete */}
               {canDelete && (

@@ -19,6 +19,7 @@ import {
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { RichTextEditor } from "@/components/rich-text-editor";
 import { toast } from "sonner";
 import { ChevronDown, Loader2 } from "lucide-react";
 import { updateReportStatus } from "@/app/actions/dashboard.action";
@@ -124,12 +125,10 @@ export function StatusUpdateButton({
           </DialogHeader>
           <div className="space-y-2 py-4">
             <Label htmlFor="reason">เหตุผล</Label>
-            <Textarea
-              id="reason"
-              placeholder="เช่น ข้อมูลไม่เพียงพอ, อยู่นอกเหนือขอบเขตงาน..."
+            <RichTextEditor
               value={rejectionReason}
-              onChange={(e) => setRejectionReason(e.target.value)}
-              rows={3}
+              onChange={setRejectionReason}
+              placeholder="ระบุเหตุผลที่ปฏิเสธเพื่อแจ้งให้ผู้ใช้ทราบ... (สามารถแทรกรูปภาพได้)"
             />
           </div>
           <DialogFooter>

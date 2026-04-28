@@ -15,6 +15,13 @@ export async function assignRequest(requestId: number, assigneeId: number | null
 
   const userId = parseInt(session.user.id, 10);
 
+  // Get request title for notification
+  const [request] = await db
+    .select({ title: reportRequests.title, assignedTo: reportRequests.assignedTo })
+    .from(reportRequests)
+    .where(eq(reportRequests.id, requestId))
+    .limit(1);
+
   await db
     .update(reportRequests)
     .set({ assignedTo: assigneeId })
@@ -26,12 +33,23 @@ export async function assignRequest(requestId: number, assigneeId: number | null
     action: "ASSIGN_REQUEST",
     resourceType: "REQUEST",
     resourceId: requestId.toString(),
-    details: { assignedTo: assigneeId },
+    details: { assignedTo: assigneeId, previousAssignee: request?.assignedTo },
   });
+
+  // Notify the new assignee (if not self-assigning)
+  if (assigneeId && assigneeId !== userId && request) {
+    const { createInAppNotification } = await import("./notification.action");
+    await createInAppNotification({
+      userId: assigneeId,
+      title: `📋 คุณได้รับมอบหมายงานใหม่`,
+      message: `${request.title} — โดย ${session.user.name || "Admin"}`,
+      link: `/requests/${requestId}`,
+    });
+  }
 
   revalidatePath(`/requests/${requestId}`);
   revalidatePath("/admin/requests");
-  
+
   return { success: true };
 }
 

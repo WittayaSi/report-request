@@ -211,9 +211,17 @@ export async function notifyAdminsNewRequest(
 
   const success = await sendTelegramMessage(ADMIN_BOT_TOKEN, ADMIN_CHAT_ID, message);
 
-  // Log notification (use first admin ID or 0)
+  // Get an admin ID to log the notification to
+  const [admin] = await db
+    .select({ id: localUsers.id })
+    .from(localUsers)
+    .where(eq(localUsers.role, "ADMIN"))
+    .limit(1);
+  const adminId = admin?.id || 1;
+
+  // Log notification
   await db.insert(notificationLog).values({
-    userId: 1, // Admin ID placeholder
+    userId: adminId, 
     requestId,
     notificationType: "new_request",
     message,

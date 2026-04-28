@@ -90,6 +90,21 @@ export async function uploadAttachment(formData: FormData) {
     return { error: "ไฟล์ใหญ่เกินไป (สูงสุด 10MB)" };
   }
 
+  // Rate limit uploads
+  const { uploadLimiter } = await import("@/lib/rate-limit");
+  const rateCheck = uploadLimiter(session.user.id);
+  if (!rateCheck.success) {
+    return { error: "อัพโหลดเร็วเกินไป กรุณารอสักครู่" };
+  }
+
+  // Validate file magic bytes (content-based type check)
+  const { validateFileMagicBytes } = await import("@/lib/file-validation");
+  const headerBytes = await file.slice(0, 16).arrayBuffer();
+  const headerBuffer = Buffer.from(headerBytes);
+  if (!validateFileMagicBytes(headerBuffer, file.type)) {
+    return { error: "ไฟล์ไม่ตรงกับประเภทที่ระบุ (อาจเป็นไฟล์ปลอม)" };
+  }
+
   try {
     await ensureUploadDir();
 

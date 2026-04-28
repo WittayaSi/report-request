@@ -1,13 +1,14 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { RichTextEditor } from "@/components/rich-text-editor";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
-import { Loader2, MessageSquare, Send, RefreshCw } from "lucide-react";
+import { Loader2, MessageSquare, Send, Lock } from "lucide-react";
 import { toast } from "sonner";
 import { addComment } from "@/app/actions/comment.action";
 import { formatThaiDateTime } from "@/utils/date-format";
@@ -24,23 +25,33 @@ interface CommentSectionProps {
   requestId: number;
   comments: Comment[];
   currentUserId: number;
+  isLocked?: boolean;
+  lockReason?: string;
+  isAdmin?: boolean;
 }
 
-const POLLING_INTERVAL = 10000; // 10 seconds
+const QUICK_REPLIES = [
+  "ได้รับเรื่องแล้ว กำลังตรวจสอบข้อมูลใน HOSxP ครับ",
+  "รับทราบครับ กำลังดำเนินการให้ครับ",
+  "รบกวนช่วยระบุเงื่อนไขวันที่ หรือ รูปแบบข้อมูลที่ต้องการ ให้ชัดเจนอีกนิดครับ",
+  "ดึงข้อมูลเสร็จเรียบร้อยและอัพโหลดไฟล์ให้แล้วครับ รบกวนตรวจสอบและทำแบบประเมินด้วยครับ"
+];
 
-export function CommentSection({ requestId, comments, currentUserId }: CommentSectionProps) {
+export function CommentSection({
+  requestId,
+  comments,
+  currentUserId,
+  isLocked = false,
+  lockReason = "คำขอนี้ถูกปิดแล้ว",
+  isAdmin = false,
+}: CommentSectionProps) {
   const router = useRouter();
   const [content, setContent] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Auto-refresh comments every 10 seconds
-  useEffect(() => {
-    const interval = setInterval(() => {
-      router.refresh();
-    }, POLLING_INTERVAL);
-
-    return () => clearInterval(interval);
-  }, [router]);
+  const handleQuickReply = (text: string) => {
+    setContent((prev) => (prev ? `${prev}\n${text}` : text));
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -91,7 +102,13 @@ export function CommentSection({ requestId, comments, currentUserId }: CommentSe
             comments.map((comment) => (
               <div key={comment.id} className="flex gap-4">
                 <Avatar className="h-8 w-8">
-                  <AvatarFallback className={comment.authorRole === "ADMIN" ? "bg-primary text-primary-foreground" : ""}>
+                  <AvatarFallback
+                    className={
+                      comment.authorRole === "ADMIN"
+                        ? "bg-primary text-primary-foreground"
+                        : ""
+                    }
+                  >
                     {getInitials(comment.authorName || "User")}
                   </AvatarFallback>
                 </Avatar>
@@ -109,9 +126,7 @@ export function CommentSection({ requestId, comments, currentUserId }: CommentSe
                       {formatThaiDateTime(comment.createdAt)}
                     </span>
                   </div>
-                  <p className="text-sm text-foreground/90 whitespace-pre-wrap">
-                    {comment.content}
-                  </p>
+                  <div className="text-sm text-foreground/90 tiptap prose prose-sm dark:prose-invert max-w-none" dangerouslySetInnerHTML={{ __html: comment.content }} />
                 </div>
               </div>
             ))
@@ -120,33 +135,62 @@ export function CommentSection({ requestId, comments, currentUserId }: CommentSe
 
         <Separator />
 
-        {/* Comment Form */}
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="flex gap-4">
-            <Avatar className="h-8 w-8">
-              <AvatarFallback>ME</AvatarFallback>
-            </Avatar>
-            <div className="flex-1 space-y-2">
-              <Textarea
-                placeholder="เขียนความคิดเห็น..."
-                value={content}
-                onChange={(e) => setContent(e.target.value)}
-                rows={2}
-                className="min-h-[80px]"
-              />
-              <div className="flex justify-end">
-                <Button type="submit" disabled={isSubmitting || !content.trim()} size="sm">
-                  {isSubmitting ? (
-                    <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                  ) : (
-                    <Send className="h-4 w-4 mr-2" />
-                  )}
-                  ส่ง
-                </Button>
+        {/* Locked message or Comment Form */}
+        {isLocked ? (
+          <div className="flex items-center justify-center gap-2 py-4 text-muted-foreground bg-muted/50 rounded-lg">
+            <Lock className="h-4 w-4" />
+            <p className="text-sm">{lockReason}</p>
+          </div>
+        ) : (
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div className="flex gap-4">
+              <Avatar className="h-8 w-8">
+                <AvatarFallback>ME</AvatarFallback>
+              </Avatar>
+              <div className="flex-1 space-y-2">
+                <RichTextEditor
+                  placeholder="เขียนความคิดเห็น... (สามารถวางรูปภาพได้)"
+                  value={content}
+                  onChange={(val) => setContent(val)}
+                />
+                
+                {isAdmin && (
+                  <div className="flex flex-wrap gap-2 py-1">
+                    <span className="text-xs text-muted-foreground self-center w-full mb-1">Quick Replies:</span>
+                    {QUICK_REPLIES.map((reply, i) => (
+                      <Button
+                        key={i}
+                        type="button"
+                        variant="secondary"
+                        size="sm"
+                        onClick={() => handleQuickReply(reply)}
+                        className="text-[10px] h-6 px-2 whitespace-nowrap overflow-hidden text-ellipsis max-w-[250px]"
+                        title={reply}
+                      >
+                        {reply}
+                      </Button>
+                    ))}
+                  </div>
+                )}
+                
+                <div className="flex justify-end">
+                  <Button
+                    type="submit"
+                    disabled={isSubmitting || !content.trim() || content === "<p></p>"}
+                    size="sm"
+                  >
+                    {isSubmitting ? (
+                      <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                    ) : (
+                      <Send className="h-4 w-4 mr-2" />
+                    )}
+                    ส่ง
+                  </Button>
+                </div>
               </div>
             </div>
-          </div>
-        </form>
+          </form>
+        )}
       </CardContent>
     </Card>
   );

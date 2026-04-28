@@ -66,6 +66,14 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           const username = credentials.username as string;
           const password = credentials.password as string;
 
+          // Rate limit login attempts per username
+          const { loginLimiter } = await import("@/lib/rate-limit");
+          const rateCheck = loginLimiter(username);
+          if (!rateCheck.success) {
+            console.warn(`[Rate Limit] Login blocked for: ${username}`);
+            return null;
+          }
+
           // 1. ตรวจสอบ Local User ก่อน (สำหรับ built-in admin)
           const { db } = await import("@/db/app.db");
           const { localUsers } = await import("@/db/app.schema");

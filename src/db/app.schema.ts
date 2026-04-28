@@ -8,6 +8,9 @@ import {
   bigint,
   date,
   unique,
+  boolean,
+  index,
+  longtext,
 } from "drizzle-orm/mysql-core";
 
 // Enum สำหรับ Role
@@ -64,7 +67,7 @@ export const reports = mysqlTable("reports", {
 export const reportRequests = mysqlTable("report_requests", {
   id: serial("id").primaryKey(),
   title: varchar("title", { length: 256 }).notNull(),
-  description: text("description"),
+  description: longtext("description"),
   
   // Output Type
   outputType: mysqlEnum("output_type", outputTypeEnum).default("file").notNull(),
@@ -107,8 +110,19 @@ export const reportRequests = mysqlTable("report_requests", {
   assignedTo: bigint("assigned_to", { mode: "number", unsigned: true })
     .references(() => localUsers.id),
   
+  // Custom Features
+  isDeleted: boolean("is_deleted").default(false).notNull(),
+  slaDeadline: timestamp("sla_deadline"), // Automatically calculated deadline
+  
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().onUpdateNow(),
+}, (table) => {
+  return {
+    statusIdx: index("status_idx").on(table.status),
+    requestedByIdx: index("requested_by_idx").on(table.requestedBy),
+    assignedToIdx: index("assigned_to_idx").on(table.assignedTo),
+    isDeletedIdx: index("is_deleted_idx").on(table.isDeleted),
+  };
 });
 
 // Comments table
@@ -120,7 +134,7 @@ export const comments = mysqlTable("comments", {
   authorId: bigint("author_id", { mode: "number", unsigned: true })
     .notNull()
     .references(() => localUsers.id),
-  content: text("content").notNull(),
+  content: longtext("content").notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
@@ -197,4 +211,69 @@ export const auditLogs = mysqlTable("audit_logs", {
   ipAddress: varchar("ip_address", { length: 45 }),
   userAgent: text("user_agent"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+// Rating value enum (1-5)
+export const ratingValueEnum = ["1", "2", "3", "4", "5"] as const;
+
+// Feedback category enum - หมวดหมู่การประเมิน
+export const feedbackCategoryEnum = [
+  "speed",        // ความรวดเร็ว
+  "accuracy",     // ความถูกต้อง  
+  "ease_of_use",  // ความเข้าใจง่าย
+  "communication" // การสื่อสาร
+] as const;
+
+// Satisfaction Ratings table - ตารางประเมินความพึงพอใจ
+export const satisfactionRatings = mysqlTable("satisfaction_ratings", {
+  id: serial("id").primaryKey(),
+  requestId: bigint("request_id", { mode: "number", unsigned: true })
+    .notNull()
+    .references(() => reportRequests.id)
+    .unique(), // One rating per request
+  userId: bigint("user_id", { mode: "number", unsigned: true })
+    .notNull()
+    .references(() => localUsers.id),
+  
+  // Overall rating 1-5
+  overallRating: mysqlEnum("overall_rating", ratingValueEnum).notNull(),
+  
+  // Category ratings (optional)
+  speedRating: mysqlEnum("speed_rating", ratingValueEnum),
+  accuracyRating: mysqlEnum("accuracy_rating", ratingValueEnum),
+  easeOfUseRating: mysqlEnum("ease_of_use_rating", ratingValueEnum),
+  communicationRating: mysqlEnum("communication_rating", ratingValueEnum),
+  
+  // Optional comment
+  comment: text("comment"),
+  
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().onUpdateNow(),
+});
+
+// In-App Notifications table
+export const inAppNotifications = mysqlTable("in_app_notifications", {
+  id: serial("id").primaryKey(),
+  userId: bigint("user_id", { mode: "number", unsigned: true })
+    .notNull()
+    .references(() => localUsers.id),
+  title: varchar("title", { length: 256 }).notNull(),
+  message: text("message").notNull(),
+  link: varchar("link", { length: 512 }), // e.g., "/requests/123"
+  isRead: mysqlEnum("is_read", ["true", "false"]).default("false").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+// Request Templates table
+export const requestTemplates = mysqlTable("request_templates", {
+  id: serial("id").primaryKey(),
+  name: varchar("name", { length: 256 }).notNull(),
+  userId: bigint("user_id", { mode: "number", unsigned: true })
+    .notNull()
+    .references(() => localUsers.id),
+  // JSON string containing template fields
+  templateData: text("template_data").notNull(),
+  isPublic: mysqlEnum("is_public", ["true", "false"]).default("false").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().onUpdateNow(),
 });

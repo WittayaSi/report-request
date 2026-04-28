@@ -1,6 +1,7 @@
 import { drizzle } from "drizzle-orm/mysql2";
 import mysql from "mysql2/promise";
 import * as schema from "@/db/app.schema";
+import "@/lib/env"; // Validate env vars on startup
 
 // Connection pool สำหรับ App MySQL
 // Force MySQL session to use UTC timezone
@@ -13,7 +14,7 @@ const appPool = mysql.createPool({
   password: process.env.MYSQL_APP_PASSWORD,
   database: process.env.MYSQL_APP_DATABASE,
   waitForConnections: true,
-  connectionLimit: 10,
+  connectionLimit: 50,
   queueLimit: 0,
   timezone: "+00:00", // Force UTC session
 });

@@ -15,6 +15,7 @@ export async function getDashboardStats() {
       count: sql<number>`count(*)`,
     })
     .from(reportRequests)
+    .where(eq(reportRequests.isDeleted, false))
     .groupBy(reportRequests.status);
 
   const total = stats.reduce((acc, curr) => acc + curr.count, 0);
@@ -23,7 +24,48 @@ export async function getDashboardStats() {
   const completed = stats.find((s) => s.status === "completed")?.count || 0;
   const rejected = stats.find((s) => s.status === "rejected")?.count || 0;
 
-  return { total, pending, inProgress, completed, rejected };
+  // Get average CSAT
+  const { satisfactionRatings } = await import("@/db/app.schema");
+  const ratings = await db
+    .select({ overallRating: satisfactionRatings.overallRating })
+    .from(satisfactionRatings);
+
+  let csat = 0;
+  if (ratings.length > 0) {
+    const totalScore = ratings.reduce((acc, curr) => acc + parseInt(curr.overallRating), 0);
+    csat = (totalScore / (ratings.length * 5)) * 100; // Percentage
+  }
+
+  // Calculate Average Resolution Time (in days)
+  const completedRequests = await db
+    .select({
+      createdAt: reportRequests.createdAt,
+      updatedAt: reportRequests.updatedAt,
+    })
+    .from(reportRequests)
+    .where(and(eq(reportRequests.status, "completed"), eq(reportRequests.isDeleted, false)));
+
+  let avgResolutionTime = 0;
+  if (completedRequests.length > 0) {
+    const totalDiff = completedRequests.reduce((acc, req) => {
+      // If no updatedAt, ignore this request
+      if (!req.updatedAt) return acc;
+      const diffMs = req.updatedAt.getTime() - req.createdAt.getTime();
+      return acc + diffMs;
+    }, 0);
+    
+    avgResolutionTime = totalDiff / completedRequests.length / (1000 * 60 * 60 * 24); // To Days
+  }
+
+  return { 
+    total, 
+    pending, 
+    inProgress, 
+    completed, 
+    rejected, 
+    csat: Math.round(csat), 
+    avgResolutionTime: avgResolutionTime.toFixed(1) 
+  };
 }
 
 export async function getRequestsByDepartment() {
@@ -58,6 +100,7 @@ export async function getRequestsByStatus() {
       count: sql<number>`count(*)`,
     })
     .from(reportRequests)
+    .where(eq(reportRequests.isDeleted, false))
     .groupBy(reportRequests.status);
 
   const statusLabels: Record<string, string> = {
@@ -99,7 +142,8 @@ export async function getSLARequests() {
       and(
         isNotNull(reportRequests.expectedDeadline),
         sql`${reportRequests.status} IN ('pending', 'in_progress')`,
-        lte(reportRequests.expectedDeadline, threeDaysFromNow)
+        lte(reportRequests.expectedDeadline, threeDaysFromNow),
+        eq(reportRequests.isDeleted, false)
       )
     )
     .orderBy(reportRequests.expectedDeadline)

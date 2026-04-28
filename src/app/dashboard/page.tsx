@@ -5,6 +5,7 @@ import { eq, count, and } from "drizzle-orm";
 import Link from "next/link";
 import { Navbar } from "@/components/navbar";
 import { StatusBadge } from "@/components/status-badge";
+import { SlaBadge } from "@/components/sla-badge";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -50,7 +51,8 @@ export default async function DashboardPage() {
     .where(
       and(
         eq(reportRequests.requestedBy, userId),
-        eq(reportRequests.status, "pending")
+        eq(reportRequests.status, "pending"),
+        eq(reportRequests.isDeleted, false)
       )
     );
 
@@ -60,7 +62,8 @@ export default async function DashboardPage() {
     .where(
       and(
         eq(reportRequests.requestedBy, userId),
-        eq(reportRequests.status, "in_progress")
+        eq(reportRequests.status, "in_progress"),
+        eq(reportRequests.isDeleted, false)
       )
     );
 
@@ -70,12 +73,13 @@ export default async function DashboardPage() {
     .where(
       and(
         eq(reportRequests.requestedBy, userId),
-        eq(reportRequests.status, "completed")
+        eq(reportRequests.status, "completed"),
+        eq(reportRequests.isDeleted, false)
       )
     );
 
   // Get recent requests
-  const recentRequests = await getRequests({ userId, limit: 5 });
+  const { data: recentRequests } = await getRequests({ userId, limit: 5 });
 
   // Admin stats
   let adminStats = null;
@@ -87,13 +91,17 @@ export default async function DashboardPage() {
     const [totalPending] = await db
       .select({ count: count() })
       .from(reportRequests)
-      .where(eq(reportRequests.status, "pending"));
+      .where(and(eq(reportRequests.status, "pending"), eq(reportRequests.isDeleted, false)));
 
     const [totalUsers] = await db.select({ count: count() }).from(localUsers);
+
+    const advancedStats = await getDashboardStats();
 
     adminStats = {
       pendingRequests: totalPending?.count || 0,
       totalUsers: totalUsers?.count || 0,
+      csat: advancedStats?.csat || 0,
+      avgResolutionTime: advancedStats?.avgResolutionTime || 0,
     };
 
     departmentData = await getRequestsByDepartment();
@@ -147,6 +155,22 @@ export default async function DashboardPage() {
                     </p>
                     <p className="text-sm text-blue-600 dark:text-blue-400">
                       ผู้ใช้ทั้งหมด
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-2xl font-bold text-green-700 dark:text-green-300">
+                      {adminStats.csat}%
+                    </p>
+                    <p className="text-sm text-green-600 dark:text-green-400">
+                      ความพึงพอใจเฉลี่ย
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-2xl font-bold text-purple-700 dark:text-purple-300">
+                      {adminStats.avgResolutionTime} วัน
+                    </p>
+                    <p className="text-sm text-purple-600 dark:text-purple-400">
+                      เวลาปิดงานเฉลี่ย
                     </p>
                   </div>
                   <Link href="/admin" className="ml-auto self-center">
@@ -294,6 +318,8 @@ export default async function DashboardPage() {
                             <Paperclip className="h-4 w-4 text-muted-foreground" />
                           </span>
                         )}
+                        {/* SLA Badge */}
+                        <SlaBadge slaDeadline={request.slaDeadline} status={request.status} />
                         <StatusBadge status={request.status} />
                       </div>
                     </div>

@@ -17,6 +17,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { RichTextEditor } from "@/components/rich-text-editor";
 import {
   Select,
   SelectContent,
@@ -120,7 +121,9 @@ export function EditRequestForm({ request }: EditRequestFormProps) {
       formData.append("title", data.title);
       if (data.description) formData.append("description", data.description);
       formData.append("outputType", data.outputType);
-      if (data.fileFormat) formData.append("fileFormat", data.fileFormat);
+      if (data.outputType === "file") {
+        formData.append("fileFormat", data.fileFormat || "excel");
+      }
       formData.append("dateRangeType", data.dateRangeType);
       if (data.startDate) formData.append("startDate", data.startDate);
       if (data.endDate) formData.append("endDate", data.endDate);
@@ -162,7 +165,7 @@ export function EditRequestForm({ request }: EditRequestFormProps) {
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
           {/* หัวข้อรายงาน */}
           <div className="space-y-2">
-            <Label htmlFor="title">หัวข้อรายงาน *</Label>
+            <Label htmlFor="title">หัวข้อรายงาน <span className="text-red-500">*</span></Label>
             <Input
               id="title"
               placeholder="เช่น รายงานสรุปยอดผู้ป่วยประจำเดือน"
@@ -176,11 +179,10 @@ export function EditRequestForm({ request }: EditRequestFormProps) {
           {/* รายละเอียด */}
           <div className="space-y-2">
             <Label htmlFor="description">รายละเอียด</Label>
-            <Textarea
-              id="description"
-              placeholder="อธิบายรายละเอียดของรายงานที่ต้องการ..."
-              rows={3}
-              {...register("description")}
+            <RichTextEditor
+              placeholder="อธิบายรายละเอียดของรายงานที่ต้องการ... (สามารถวางรูปภาพได้)"
+              value={watch("description") || ""}
+              onChange={(val) => setValue("description", val)}
             />
           </div>
 
@@ -233,7 +235,7 @@ export function EditRequestForm({ request }: EditRequestFormProps) {
           {/* รูปแบบไฟล์ */}
           {outputType === "file" && (
             <div className="space-y-2">
-              <Label>รูปแบบไฟล์ *</Label>
+              <Label>รูปแบบไฟล์ <span className="text-red-500">*</span></Label>
               <Select
                 value={watch("fileFormat") || "excel"}
                 onValueChange={(value) => setValue("fileFormat", value as RequestFormValues["fileFormat"])}
@@ -379,11 +381,10 @@ export function EditRequestForm({ request }: EditRequestFormProps) {
           {/* หมายเหตุเพิ่มเติม */}
           <div className="space-y-2">
             <Label htmlFor="additionalNotes">หมายเหตุเพิ่มเติม</Label>
-            <Textarea
-              id="additionalNotes"
+            <RichTextEditor
               placeholder="ข้อมูลอื่นๆ ที่ต้องการแจ้ง Admin"
-              rows={3}
-              {...register("additionalNotes")}
+              value={watch("additionalNotes") || ""}
+              onChange={(val) => setValue("additionalNotes", val)}
             />
           </div>
 

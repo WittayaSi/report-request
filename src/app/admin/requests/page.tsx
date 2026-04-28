@@ -1,5 +1,6 @@
 import { auth } from "@/auth";
 import { db } from "@/db/app.db";
+import { count as countFn } from "drizzle-orm";
 import { reportRequests, localUsers, comments, requestViews } from "@/db/app.schema";
 import { desc, eq, sql, and, like } from "drizzle-orm";
 import { alias } from "drizzle-orm/mysql-core";
@@ -21,6 +22,8 @@ import { formatThaiDateTime } from "@/utils/date-format";
 import { AutoRefresh } from "@/components/auto-refresh";
 import { SearchFilters } from "./_components/search-filters";
 import { ExportButton } from "./_components/export-button";
+import { Pagination } from "@/components/pagination";
+import { SlaBadge } from "@/components/sla-badge";
 import { searchRequests, getDepartmentList, SearchFilters as SearchFiltersType } from "@/app/actions/search.action";
 import { getAdminUsers } from "@/app/actions/assignment.action";
 
@@ -32,6 +35,7 @@ interface AdminRequestsPageProps {
     assigned?: string;
     start?: string;
     end?: string;
+    page?: string;
   }>;
 }
 
@@ -48,6 +52,8 @@ export default async function AdminRequestsPage({
 
   const params = await searchParams;
   const statusFilter = params.status;
+  const currentPage = parseInt(params.page || "1", 10);
+  const pageSize = 10;
   
   // Prepare search filters
   const filters: SearchFiltersType = {
@@ -73,7 +79,7 @@ export default async function AdminRequestsPage({
   const currentUserId = Number(session.user.id);
   
   // Build filter conditions
-  const filterConditions = [];
+  const filterConditions = [eq(reportRequests.isDeleted, false)];
   
   if (filters.query) {
     // Escape special SQL LIKE characters to prevent injection
@@ -91,7 +97,11 @@ export default async function AdminRequestsPage({
   }
 
   if (filters.assignedTo && filters.assignedTo !== "all") {
-    filterConditions.push(eq(reportRequests.assignedTo, parseInt(filters.assignedTo)));
+    if (filters.assignedTo === "unassigned") {
+      filterConditions.push(sql`${reportRequests.assignedTo} IS NULL`);
+    } else {
+      filterConditions.push(eq(reportRequests.assignedTo, parseInt(filters.assignedTo)));
+    }
   }
   
   if (filters.startDate) {
@@ -107,12 +117,26 @@ export default async function AdminRequestsPage({
   // Alias for assignee join
   const assignee = alias(localUsers, "assignee");
 
-  const requests = await db
+  const whereClause = filterConditions.length > 0 ? and(...filterConditions) : undefined;
+
+  // Count total for pagination
+  const [totalResult] = await db
+    .select({ count: countFn() })
+    .from(reportRequests)
+    .leftJoin(localUsers, eq(reportRequests.requestedBy, localUsers.id))
+    .where(whereClause);
+  const totalCount = totalResult?.count || 0;
+  const totalPages = Math.ceil(totalCount / pageSize);
+  const offset = (currentPage - 1) * pageSize;
+
+  const filteredRequests = await db
     .select({
       id: reportRequests.id,
       title: reportRequests.title,
       description: reportRequests.description,
       status: reportRequests.status,
+      priority: reportRequests.priority,
+      slaDeadline: reportRequests.slaDeadline,
       createdAt: reportRequests.createdAt,
       userName: localUsers.name,
       userDepartment: localUsers.department,
@@ -132,7 +156,6 @@ export default async function AdminRequestsPage({
         WHERE a.request_id = ${reportRequests.id}
         AND a.attachment_type = 'result'
       )`,
-      priority: reportRequests.priority,
     })
     .from(reportRequests)
     .leftJoin(localUsers, eq(reportRequests.requestedBy, localUsers.id))
@@ -144,7 +167,7 @@ export default async function AdminRequestsPage({
         eq(requestViews.userId, currentUserId)
       )
     )
-    .where(filterConditions.length > 0 ? and(...filterConditions) : undefined)
+    .where(whereClause)
     .orderBy(
       sql`CASE 
         WHEN ${reportRequests.priority} = 'urgent' THEN 4
@@ -154,16 +177,14 @@ export default async function AdminRequestsPage({
         ELSE 0
       END DESC`,
       desc(reportRequests.createdAt)
-    );
+    )
+    .limit(pageSize)
+    .offset(offset);
 
-  // Filter by status if specified (redundant with DB filter but kept for safety)
-  const filteredRequests = statusFilter
-    ? requests.filter((r) => r.status === statusFilter)
-    : requests;
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
-      <AutoRefresh interval={10000} /> {/* Auto-refresh every 10 seconds */}
+      <AutoRefresh interval={30000} /> {/* Smart refresh: checks lightweight API, adapts interval */}
       <Navbar />
 
       <main className="container mx-auto px-4 py-8">
@@ -177,7 +198,7 @@ export default async function AdminRequestsPage({
           <div>
             <h1 className="text-3xl font-bold">จัดการคำขอ</h1>
             <p className="text-muted-foreground">
-              คำขอทั้งหมด {filteredRequests.length} รายการ
+              คำขอทั้งหมด {totalCount} รายการ
               {statusFilter && ` (กรอง: ${statusFilter})`}
             </p>
           </div>
@@ -218,6 +239,28 @@ export default async function AdminRequestsPage({
               size="sm"
             >
               เสร็จสิ้น
+            </Button>
+          </Link>
+
+          {/* My Tasks filter */}
+          <Link href={`/admin/requests?assigned=${currentUserId}`}>
+            <Button
+              variant={params.assigned === String(currentUserId) ? "default" : "outline"}
+              size="sm"
+              className={params.assigned === String(currentUserId) ? "" : "border-blue-300 text-blue-600 hover:bg-blue-50 dark:border-blue-700 dark:text-blue-400 dark:hover:bg-blue-950"}
+            >
+              📋 งานของฉัน
+            </Button>
+          </Link>
+
+          {/* Unassigned filter */}
+          <Link href="/admin/requests?assigned=unassigned">
+            <Button
+              variant={params.assigned === "unassigned" ? "default" : "outline"}
+              size="sm"
+              className={params.assigned === "unassigned" ? "" : "border-orange-300 text-orange-600 hover:bg-orange-50 dark:border-orange-700 dark:text-orange-400 dark:hover:bg-orange-950"}
+            >
+              ⏳ ยังไม่มอบหมาย
             </Button>
           </Link>
           </div>
@@ -282,6 +325,9 @@ export default async function AdminRequestsPage({
                           <CheckCircle2 className="h-4 w-4 text-green-500" />
                         </span>
                       )}
+                      
+                      {/* SLA Warning */}
+                      <SlaBadge slaDeadline={request.slaDeadline} status={request.status} />
                       {/* Attachment indicator */}
                       {request.attachmentCount > 0 && request.hasResultFile === 0 && (
                         <span title="มีไฟล์แนบ">
@@ -302,6 +348,23 @@ export default async function AdminRequestsPage({
                 ))}
               </div>
             )}
+
+            {/* Pagination */}
+            <Pagination
+              currentPage={currentPage}
+              totalPages={totalPages}
+              totalCount={totalCount}
+              pageSize={pageSize}
+              basePath="/admin/requests"
+              currentParams={{
+                status: params.status,
+                q: params.q,
+                dept: params.dept,
+                assigned: params.assigned,
+                start: params.start,
+                end: params.end,
+              }}
+            />
           </CardContent>
         </Card>
       </main>

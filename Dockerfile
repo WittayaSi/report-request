@@ -29,8 +29,8 @@ WORKDIR /app
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
 
-# Install mysql2 for init script
-RUN npm install -g mysql2
+# Install dependencies for init script (locally)
+RUN npm init -y && npm install mysql2 drizzle-kit dotenv drizzle-orm
 
 # Create non-root user for security
 RUN addgroup --system --gid 1001 nodejs

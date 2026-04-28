@@ -9,6 +9,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { User, LogOut, Settings, LayoutDashboard, Shield, History } from "lucide-react";
+import { NotificationBell } from "@/components/notification-bell";
 
 export async function Navbar() {
   const session = await auth();
@@ -47,6 +48,8 @@ export async function Navbar() {
                     </Button>
                   </Link>
                 )}
+
+                <NotificationBell />
 
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>

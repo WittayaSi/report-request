@@ -13,9 +13,17 @@ const commentSchema = z.object({
 });
 
 export async function addComment(requestId: number, content: string) {
+  try {
   const session = await auth();
   if (!session?.user?.id) {
     return { error: "Unauthorized" };
+  }
+
+  // Rate limit
+  const { commentLimiter } = await import("@/lib/rate-limit");
+  const rateCheck = commentLimiter(session.user.id);
+  if (!rateCheck.success) {
+    return { error: "ส่ง comment เร็วเกินไป กรุณารอสักครู่" };
   }
 
   const userId = parseInt(session.user.id, 10);
@@ -34,6 +42,17 @@ export async function addComment(requestId: number, content: string) {
 
   if (request.length === 0) {
     return { error: "ไม่พบคำขอ" };
+  }
+
+  // Block comments if request has been rated
+  const { satisfactionRatings } = await import("@/db/app.schema");
+  const [rating] = await db
+    .select({ id: satisfactionRatings.id })
+    .from(satisfactionRatings)
+    .where(eq(satisfactionRatings.requestId, requestId))
+    .limit(1);
+  if (rating) {
+    return { error: "ไม่สามารถ comment ได้ เนื่องจากคำขอนี้ถูกประเมินแล้ว" };
   }
 
   // Insert comment
@@ -63,9 +82,34 @@ export async function addComment(requestId: number, content: string) {
   const { sendNewCommentEmail } = await import("./email.action");
   await sendNewCommentEmail(requestId, session.user.name || "Unknown");
 
+  // Create in-app notification for request owner (if not self-commenting)
+  const reqData = request[0];
+  if (reqData.requestedBy !== userId) {
+    const { createInAppNotification } = await import("./notification.action");
+    await createInAppNotification({
+      userId: reqData.requestedBy,
+      title: `ความคิดเห็นใหม่จาก ${session.user.name || "Unknown"}`,
+      message: reqData.title,
+      link: `/requests/${requestId}`,
+    });
+  }
+
+  // Create in-app notification for all admins
+  const { notifyAllAdmins } = await import("./notification.action");
+  await notifyAllAdmins({
+    title: `💬 ความคิดเห็นใหม่`,
+    message: `${reqData.title} — โดย ${session.user.name || "Unknown"}`,
+    link: `/requests/${requestId}`,
+    excludeUserId: userId, // Don't notify the commenter themselves
+  });
+
   revalidatePath(`/requests/${requestId}`);
   revalidatePath("/admin/requests");
   revalidatePath("/requests");
   revalidatePath("/dashboard");
   return { success: true };
+  } catch (error) {
+    console.error("[addComment Error]", error);
+    return { error: "เกิดข้อผิดพลาดในการส่ง comment" };
+  }
 }

@@ -1,7 +1,7 @@
 import { auth } from "@/auth";
 import { db } from "@/db/app.db";
 import { reportRequests, localUsers } from "@/db/app.schema";
-import { count, eq } from "drizzle-orm";
+import { count, eq, and } from "drizzle-orm";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { Navbar } from "@/components/navbar";
@@ -20,6 +20,8 @@ import {
   ArrowRight,
   AlertCircle,
 } from "lucide-react";
+import { getSatisfactionStats } from "@/app/actions/satisfaction.action";
+import { SatisfactionStatsCard } from "@/components/satisfaction-stats-card";
 
 export default async function AdminPage() {
   const session = await auth();
@@ -31,16 +33,22 @@ export default async function AdminPage() {
   }
 
   // Get stats
-  const [totalRequests] = await db.select({ count: count() }).from(reportRequests);
+  const [totalRequests] = await db
+    .select({ count: count() })
+    .from(reportRequests)
+    .where(eq(reportRequests.isDeleted, false));
   const [pendingRequests] = await db
     .select({ count: count() })
     .from(reportRequests)
-    .where(eq(reportRequests.status, "pending"));
+    .where(and(eq(reportRequests.status, "pending"), eq(reportRequests.isDeleted, false)));
   const [inProgressRequests] = await db
     .select({ count: count() })
     .from(reportRequests)
-    .where(eq(reportRequests.status, "in_progress"));
+    .where(and(eq(reportRequests.status, "in_progress"), eq(reportRequests.isDeleted, false)));
   const [totalUsers] = await db.select({ count: count() }).from(localUsers);
+
+  // Get satisfaction stats
+  const satisfactionStats = await getSatisfactionStats();
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
@@ -154,6 +162,11 @@ export default async function AdminPage() {
               </CardHeader>
             </Card>
           </Link>
+        </div>
+
+        {/* Satisfaction Stats */}
+        <div className="mt-8">
+          <SatisfactionStatsCard stats={satisfactionStats} />
         </div>
       </main>
     </div>

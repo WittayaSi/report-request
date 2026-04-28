@@ -14,13 +14,15 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea"; // Assuming you've added this
+import { Textarea } from "@/components/ui/textarea"; 
+import { RichTextEditor } from "@/components/rich-text-editor";
 import { createReportRequest } from "@/app/actions/dashboard.action"; // Import the server action
 import { Loader2 } from "lucide-react";
 
 export function CreateRequestDialog() {
   const [open, setOpen] = useState(false);
   const [isPending, setIsPending] = useState(false);
+  const [description, setDescription] = useState("");
 
   async function handleSubmit(formData: FormData) {
     setIsPending(true);
@@ -29,6 +31,7 @@ export function CreateRequestDialog() {
 
     if (result?.success) {
       setOpen(false); // Close the dialog on success
+      setDescription(""); // Reset value
     } else {
       // Optional: Handle errors, e.g., show a toast notification
       alert("Failed to create request.");
@@ -64,12 +67,14 @@ export function CreateRequestDialog() {
               <Label htmlFor="description" className="text-right">
                 Description
               </Label>
-              <Textarea
-                id="description"
-                name="description"
-                className="col-span-3"
-                placeholder="(Optional) Provide more details"
-              />
+              <div className="col-span-3">
+                <input type="hidden" name="description" value={description} />
+                <RichTextEditor
+                  value={description}
+                  onChange={setDescription}
+                  placeholder="(Optional) Provide more details"
+                />
+              </div>
             </div>
           </div>
           <DialogFooter>

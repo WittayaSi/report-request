@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { db } from "@/db/app.db";
 import { reportRequests } from "@/db/app.schema";
-import { auth } from "../../../auth";
+import { auth } from "@/auth";
 import { eq } from "drizzle-orm";
 import { sendTelegramNotification } from "@/lib/notifications";
 import { logAudit } from "./audit.action";
@@ -52,6 +52,7 @@ const outputTypeLabels: Record<string, string> = {
 
 // Create
 export async function createReportRequest(formData: FormData) {
+  try {
   const userId = await getCurrentUserId();
   if (!userId) return { error: "Unauthorized" };
 
@@ -67,11 +68,21 @@ export async function createReportRequest(formData: FormData) {
 
   const data = validatedFields.data;
 
+  // Calculate SLA Deadline
+  const slaDeadline = new Date();
+  const priorityHours = {
+    urgent: 6,
+    high: 24, // 1 days
+    medium: 48, // 2 days
+    low: 72, // 3 days
+  };
+  slaDeadline.setHours(slaDeadline.getHours() + (priorityHours[data.priority] || 72));
+
   await db.insert(reportRequests).values({
     title: data.title,
     description: data.description || null,
     outputType: data.outputType,
-    fileFormat: data.outputType === "file" ? data.fileFormat : null,
+    fileFormat: data.outputType === "file" ? (data.fileFormat || "excel") : null,
     dateRangeType: data.dateRangeType,
     startDate: data.startDate ? new Date(data.startDate) : null,
     endDate: data.endDate ? new Date(data.endDate) : null,
@@ -80,6 +91,7 @@ export async function createReportRequest(formData: FormData) {
     priority: data.priority,
     sourceSystem: data.sourceSystem,
     expectedDeadline: data.expectedDeadline ? new Date(data.expectedDeadline) : null,
+    slaDeadline: slaDeadline,
     dataSource: data.dataSource || null,
     additionalNotes: data.additionalNotes || null,
     requestedBy: userId,
@@ -120,9 +132,22 @@ export async function createReportRequest(formData: FormData) {
   
   await sendTelegramNotification(message);
 
+  // Create in-app notification for all admins
+  const { notifyAllAdmins } = await import("./notification.action");
+  await notifyAllAdmins({
+    title: `📢 คำขอรายงานใหม่`,
+    message: `${data.title} — โดย ${session?.user?.name}`,
+    link: "/admin/requests",
+    excludeUserId: userId, // Don't notify if the creator is also an admin
+  });
+
   revalidatePath("/dashboard");
   revalidatePath("/requests");
   return { success: true };
+  } catch (error) {
+    console.error("[createReportRequest Error]", error);
+    return { error: "เกิดข้อผิดพลาดในการสร้างคำขอ" };
+  }
 }
 
 // Update Status (Admin only)
@@ -131,18 +156,35 @@ export async function updateReportStatus(
   newStatus: "pending" | "in_progress" | "completed" | "rejected" | "cancelled",
   rejectionReason?: string
 ) {
+  try {
   const session = await auth();
   if (session?.user?.role !== "ADMIN") return { error: "Unauthorized" };
 
+  const userId = parseInt(session.user.id, 10);
+
+  // Get current request info before update
+  const [currentRequest] = await db
+    .select({
+      requestedBy: reportRequests.requestedBy,
+      title: reportRequests.title,
+      assignedTo: reportRequests.assignedTo,
+    })
+    .from(reportRequests)
+    .where(eq(reportRequests.id, requestId))
+    .limit(1);
+
+  // Auto-assign: when changing to in_progress and not yet assigned, assign to current admin
+  const shouldAutoAssign =
+    newStatus === "in_progress" && (!currentRequest?.assignedTo || currentRequest.assignedTo === null);
+
   await db
     .update(reportRequests)
-    .set({ 
+    .set({
       status: newStatus,
-      rejectionReason: newStatus === "rejected" ? rejectionReason : null 
+      rejectionReason: newStatus === "rejected" ? rejectionReason : null,
+      ...(shouldAutoAssign ? { assignedTo: userId } : {}),
     })
     .where(eq(reportRequests.id, requestId));
-  
-  const userId = parseInt(session.user.id, 10);
 
   // Log Audit
   await logAudit({
@@ -153,6 +195,7 @@ export async function updateReportStatus(
     details: {
       newStatus,
       rejectionReason: newStatus === "rejected" ? rejectionReason : undefined,
+      autoAssigned: shouldAutoAssign ? userId : undefined,
     },
   });
 
@@ -164,10 +207,32 @@ export async function updateReportStatus(
   const { sendStatusChangeEmail } = await import("./email.action");
   await sendStatusChangeEmail(requestId, newStatus, rejectionReason);
 
+  // Create in-app notification for request owner
+  if (currentRequest) {
+    const statusLabels: Record<string, string> = {
+      pending: "รอดำเนินการ",
+      in_progress: "กำลังดำเนินการ",
+      completed: "เสร็จสิ้น",
+      rejected: "ปฏิเสธ",
+      cancelled: "ยกเลิก",
+    };
+    const { createInAppNotification } = await import("./notification.action");
+    await createInAppNotification({
+      userId: currentRequest.requestedBy,
+      title: `สถานะเปลี่ยนเป็น "${statusLabels[newStatus] || newStatus}"`,
+      message: currentRequest.title,
+      link: `/requests/${requestId}`,
+    });
+  }
+
   revalidatePath("/dashboard");
   revalidatePath("/admin/requests");
   revalidatePath(`/requests/${requestId}`);
   return { success: true };
+  } catch (error) {
+    console.error("[updateReportStatus Error]", error);
+    return { error: "เกิดข้อผิดพลาดในการอัพเดทสถานะ" };
+  }
 }
 
 // Cancel (User only - can only cancel own pending requests)
@@ -217,38 +282,87 @@ export async function cancelReportRequest(requestId: number) {
 }
 
 
-// Get Requests with Unread Status
+// Get Requests with Unread Status — supports pagination, filter, and sort
 export async function getRequests(
-  filter: { status?: string; userId?: number; limit?: number } = {}
+  filter: {
+    status?: string;
+    userId?: number;
+    limit?: number;
+    page?: number;
+    pageSize?: number;
+    query?: string;
+    sortBy?: "date" | "priority";
+    sortOrder?: "asc" | "desc";
+  } = {}
 ) {
   const session = await auth();
-  if (!session?.user?.id) return [];
+  if (!session?.user?.id) return { data: [], totalCount: 0, totalPages: 0, currentPage: 1 };
 
   const currentUserId = parseInt(session.user.id, 10);
   const { db } = await import("@/db/app.db");
   const { reportRequests, localUsers, comments, requestViews } = await import(
     "@/db/app.schema"
   );
-  const { eq, desc, and, sql, gt } = await import("drizzle-orm");
+  const { eq, desc, asc, and, sql, like, count: countFn } = await import("drizzle-orm");
 
-  let conditions = undefined;
-  if (filter.status) {
-    conditions = eq(reportRequests.status, filter.status as any);
+  // Build conditions
+  const conditions = [eq(reportRequests.isDeleted, false)];
+  if (filter.status && filter.status !== "all") {
+    conditions.push(eq(reportRequests.status, filter.status as any));
   }
   if (filter.userId) {
-    const userCondition = eq(reportRequests.requestedBy, filter.userId);
-    conditions = conditions ? and(conditions, userCondition) : userCondition;
+    conditions.push(eq(reportRequests.requestedBy, filter.userId));
+  }
+  if (filter.query) {
+    const escapedQuery = filter.query.replace(/[%_\\]/g, '\\$&');
+    conditions.push(like(reportRequests.title, `%${escapedQuery}%`));
   }
 
-  // Subquery to find the latest comment timestamp for each request
-  // and check if it's newer than the user's last view
-  const query = db
+  const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
+
+  // Count total
+  const [totalResult] = await db
+    .select({ count: countFn() })
+    .from(reportRequests)
+    .where(whereClause);
+  const totalCount = totalResult?.count || 0;
+
+  // Pagination
+  const page = filter.page || 1;
+  const pageSize = filter.limit || filter.pageSize || 10;
+  const totalPages = Math.ceil(totalCount / pageSize);
+  const offset = (page - 1) * pageSize;
+
+  // Sort
+  let orderByClause;
+  if (filter.sortBy === "priority") {
+    orderByClause = filter.sortOrder === "asc"
+      ? [sql`CASE 
+          WHEN ${reportRequests.priority} = 'low' THEN 1
+          WHEN ${reportRequests.priority} = 'medium' THEN 2
+          WHEN ${reportRequests.priority} = 'high' THEN 3
+          WHEN ${reportRequests.priority} = 'urgent' THEN 4
+          ELSE 0 END ASC`, desc(reportRequests.createdAt)]
+      : [sql`CASE 
+          WHEN ${reportRequests.priority} = 'urgent' THEN 4
+          WHEN ${reportRequests.priority} = 'high' THEN 3
+          WHEN ${reportRequests.priority} = 'medium' THEN 2
+          WHEN ${reportRequests.priority} = 'low' THEN 1
+          ELSE 0 END DESC`, desc(reportRequests.createdAt)];
+  } else {
+    orderByClause = filter.sortOrder === "asc"
+      ? [asc(reportRequests.createdAt)]
+      : [desc(reportRequests.createdAt)];
+  }
+
+  const data = await db
     .select({
       id: reportRequests.id,
       title: reportRequests.title,
       description: reportRequests.description,
       status: reportRequests.status,
       priority: reportRequests.priority,
+      slaDeadline: reportRequests.slaDeadline,
       createdAt: reportRequests.createdAt,
       requestedBy: reportRequests.requestedBy,
       userName: localUsers.name,
@@ -280,13 +394,11 @@ export async function getRequests(
         eq(requestViews.userId, currentUserId)
       )
     )
-    .where(conditions)
-    .orderBy(desc(reportRequests.createdAt));
+    .where(whereClause)
+    .orderBy(...orderByClause)
+    .limit(pageSize)
+    .offset(offset);
 
-  if (filter.limit) {
-    query.limit(filter.limit);
-  }
-
-  const requests = await query;
-  return requests;
+  return { data, totalCount, totalPages, currentPage: page };
 }
+

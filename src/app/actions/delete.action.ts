@@ -47,27 +47,13 @@ export async function deleteRequest(requestId: number) {
   }
 
   try {
-    // Get all attachments to delete files
-    const requestAttachments = await db
-      .select({ storedFilename: attachments.storedFilename })
-      .from(attachments)
-      .where(eq(attachments.requestId, requestId));
+    // Instead of Hard Delete (DELETING everything), we do Soft Delete.
+    // We update isDeleted = true, but keep the data, attachments, and comments.
 
-    // Delete physical files
-    for (const att of requestAttachments) {
-      const filePath = join(UPLOAD_DIR, att.storedFilename);
-      if (existsSync(filePath)) {
-        await unlink(filePath);
-      }
-    }
-
-    // Delete related records in order
-    await db.delete(attachments).where(eq(attachments.requestId, requestId));
-    await db.delete(comments).where(eq(comments.requestId, requestId));
-    await db.delete(requestViews).where(eq(requestViews.requestId, requestId));
-
-    // Delete the request
-    await db.delete(reportRequests).where(eq(reportRequests.id, requestId));
+    await db
+      .update(reportRequests)
+      .set({ isDeleted: true })
+      .where(eq(reportRequests.id, requestId));
 
     // Log audit
     await logAudit({
